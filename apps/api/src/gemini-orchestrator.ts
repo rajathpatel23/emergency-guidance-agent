@@ -1,5 +1,5 @@
 import type { ModelInterpretation, SessionState } from "@emergency-guidance/shared";
-import { BLEEDING_CONTROL_SYSTEM_PROMPT } from "./prompts/system-prompt.js";
+import { CPR_ASSISTANT_SYSTEM_PROMPT } from "./prompts/system-prompt.js";
 
 export interface GeminiOrchestrator {
   interpret(input: {
@@ -16,13 +16,13 @@ export interface GeminiOrchestrator {
 export function createStubGeminiOrchestrator(): GeminiOrchestrator {
   return {
     async interpret(input) {
-      void BLEEDING_CONTROL_SYSTEM_PROMPT;
+      void CPR_ASSISTANT_SYSTEM_PROMPT;
       const t = input.transcript?.toLowerCase() ?? "";
       const interpretation: ModelInterpretation = {
         transcript_summary: input.transcript,
-        injury_visible: /blood|bleed|cut|arm|injury|wound/.test(t),
+        patient_visible: /\b(person|patient|victim|chest|floor|back|unresponsive|not breathing)\b/.test(t),
         view_unclear: false,
-        pressure_applied: /press|push|holding|firm/.test(t),
+        compressions_detected: /\b(compress|compression|push|pumping|cpr|pressing)\b/.test(t),
         suggested_instruction: undefined,
       };
       return interpretation;

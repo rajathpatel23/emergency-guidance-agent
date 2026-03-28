@@ -19,38 +19,38 @@ class StateConfig:
 STATES: dict[WorkflowStep, StateConfig] = {
     "intake": StateConfig(
         label="Intake",
-        objective="Collect initial context. See the injury. Understand urgency.",
-        default_instruction="Show me the injury and tell me what happened.",
+        objective="Collect context: unresponsive patient, safety, willingness to help.",
+        default_instruction="Tell me what happened—is the person breathing and responsive?",
         allowed_next=["escalation"],
     ),
     "escalation": StateConfig(
         label="Escalation",
-        objective="Ensure emergency services are contacted.",
-        default_instruction="This looks serious. Call emergency services now if you have not already.",
-        allowed_next=["identify_injury"],
+        objective="Ensure emergency services are contacted or delegated.",
+        default_instruction="Call emergency services now and use speakerphone if you can.",
+        allowed_next=["see_patient"],
     ),
-    "identify_injury": StateConfig(
-        label="Identify Injury",
-        objective="Get a clear view of the bleeding site.",
-        default_instruction="Move the camera closer to the bleeding area.",
-        allowed_next=["apply_pressure"],
+    "see_patient": StateConfig(
+        label="See patient",
+        objective="Get a clear view of the victim on a firm, flat surface; chest visible if possible.",
+        default_instruction="Show me the person on their back—camera steady, chest in view if you can.",
+        allowed_next=["start_compressions"],
     ),
-    "apply_pressure": StateConfig(
-        label="Apply Pressure",
-        objective="Instruct user to apply direct pressure to the wound.",
-        default_instruction="Press firmly on the wound with a clean cloth or towel now.",
-        allowed_next=["maintain_pressure"],
+    "start_compressions": StateConfig(
+        label="Start compressions",
+        objective="Hand placement and first rhythmic chest compressions.",
+        default_instruction="Kneel beside them. Place the heel of one hand on the center of the chest, other hand on top. Push hard and fast.",
+        allowed_next=["continue_cpr"],
     ),
-    "maintain_pressure": StateConfig(
-        label="Maintain Pressure",
-        objective="Reinforce continued steady pressure.",
-        default_instruction="Keep steady pressure. If blood soaks through, place more cloth on top and keep pressing.",
+    "continue_cpr": StateConfig(
+        label="Continue CPR",
+        objective="Reinforce depth, rate ~100–120/min, minimal pauses, switch rescuers if tired.",
+        default_instruction="Keep going—at least two inches deep, let the chest rise fully between pushes. You’re doing great.",
         allowed_next=["complete"],
     ),
     "complete": StateConfig(
         label="Complete",
-        objective="Close the session cleanly.",
-        default_instruction="Good. Keep pressure on the wound until help arrives.",
+        objective="Close until help arrives or AED/ALS takes over.",
+        default_instruction="Keep CPR going until help arrives or the person responds. You made a real difference.",
         allowed_next=[],
     ),
 }
@@ -110,25 +110,24 @@ def evaluate(
         return WorkflowDecision(kind="stay", next_step="intake", reason="waiting for context")
 
     if step == "escalation":
-        # Auto-advance after one delivery
         if session.step_attempts >= 1:
-            return WorkflowDecision(kind="advance", next_step="identify_injury", reason="escalation delivered")
+            return WorkflowDecision(kind="advance", next_step="see_patient", reason="escalation delivered")
         return WorkflowDecision(kind="repeat", next_step="escalation", reason="delivering escalation")
 
-    if step == "identify_injury":
+    if step == "see_patient":
         if interpretation.person_visible:
-            return WorkflowDecision(kind="advance", next_step="apply_pressure", reason="injury visible")
-        return WorkflowDecision(kind="repeat", next_step="identify_injury", reason="injury not yet visible")
+            return WorkflowDecision(kind="advance", next_step="start_compressions", reason="patient in view")
+        return WorkflowDecision(kind="repeat", next_step="see_patient", reason="patient not clearly visible")
 
-    if step == "apply_pressure":
+    if step == "start_compressions":
         if interpretation.compressions_happening or interpretation.hands_positioned:
-            return WorkflowDecision(kind="advance", next_step="maintain_pressure", reason="pressure applied")
-        return WorkflowDecision(kind="repeat", next_step="apply_pressure", reason="pressure not yet applied")
+            return WorkflowDecision(kind="advance", next_step="continue_cpr", reason="compressions started")
+        return WorkflowDecision(kind="repeat", next_step="start_compressions", reason="compressions not yet observed")
 
-    if step == "maintain_pressure":
+    if step == "continue_cpr":
         if session.step_attempts >= 2:
             return WorkflowDecision(kind="advance", next_step="complete", reason="reinforcement delivered")
-        return WorkflowDecision(kind="repeat", next_step="maintain_pressure", reason="reinforcing pressure")
+        return WorkflowDecision(kind="repeat", next_step="continue_cpr", reason="reinforcing compressions")
 
     return WorkflowDecision(kind="stay", next_step="complete", reason="terminal state")
 
@@ -158,8 +157,12 @@ def current_config(session: SessionState) -> StateConfig:
 def step_number(step: WorkflowStep) -> int:
     """1-based step index for progress display."""
     order: list[WorkflowStep] = [
-        "intake", "escalation", "identify_injury",
-        "apply_pressure", "maintain_pressure", "complete",
+        "intake",
+        "escalation",
+        "see_patient",
+        "start_compressions",
+        "continue_cpr",
+        "complete",
     ]
     return order.index(step) + 1
 

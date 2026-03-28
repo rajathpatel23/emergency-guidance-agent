@@ -1,15 +1,17 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import websocket from "@fastify/websocket";
 import { createSession, getSession, endSession, updateSession } from "./session-manager.js";
 import { createStubGeminiOrchestrator } from "./gemini-orchestrator.js";
 import { decideAfterModel, applyWorkflowDecision } from "./workflow-engine.js";
 import { formatInstruction } from "./response-formatter.js";
-import type { ClientToBackendEvent } from "@emergency-guidance/shared";
+import type { ClientToBackendEvent, WorkflowStep } from "@emergency-guidance/shared";
 
 const app = Fastify({ logger: true });
 const gemini = createStubGeminiOrchestrator();
 
 await app.register(cors);
+await app.register(websocket);
 
 app.get("/health", async () => ({ status: "ok" }));
 
@@ -18,8 +20,8 @@ app.post("/session", async () => {
   return { session_id: session.session_id };
 });
 
-app.get("/ws/:sessionId", { websocket: true }, (socket, req) => {
-  const { sessionId } = req.params as { sessionId: string };
+app.get<{ Params: { sessionId: string } }>("/ws/:sessionId", { websocket: true }, (socket, req) => {
+  const sessionId = req.params.sessionId;
   const session = getSession(sessionId);
 
   if (!session) {
@@ -29,7 +31,7 @@ app.get("/ws/:sessionId", { websocket: true }, (socket, req) => {
 
   socket.send(JSON.stringify(formatInstruction(session)));
 
-  socket.on("message", async (raw) => {
+  socket.on("message", async (raw: Buffer | ArrayBuffer | Buffer[]) => {
     let event: ClientToBackendEvent;
     try {
       event = JSON.parse(raw.toString()) as ClientToBackendEvent;
@@ -47,17 +49,15 @@ app.get("/ws/:sessionId", { websocket: true }, (socket, req) => {
     }
 
     if (event.event_type === "user.done") {
-      const decision = { kind: "advance" as const, next: (() => {
-        const nexts: Record<string, string> = {
-          intake: "escalation",
-          escalation: "identify_injury",
-          identify_injury: "apply_pressure",
-          apply_pressure: "maintain_pressure",
-          maintain_pressure: "complete",
-          complete: "complete",
-        };
-        return nexts[current.current_step] as any;
-      })() };
+      const nexts: Record<WorkflowStep, WorkflowStep> = {
+        intake: "escalation",
+        escalation: "see_patient",
+        see_patient: "start_compressions",
+        start_compressions: "continue_cpr",
+        continue_cpr: "complete",
+        complete: "complete",
+      };
+      const decision = { kind: "advance" as const, next: nexts[current.current_step] };
       const next = applyWorkflowDecision(current, decision);
       updateSession(sessionId, next);
       socket.send(JSON.stringify(formatInstruction(next)));
