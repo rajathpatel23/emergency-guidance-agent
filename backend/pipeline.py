@@ -1,9 +1,7 @@
 import os
 from loguru import logger
 
-from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.frames.frames import (
-    AudioRawFrame,
     Frame,
     LLMFullResponseEndFrame,
     TextFrame,
@@ -14,7 +12,7 @@ from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.serializers.protobuf import ProtobufFrameSerializer
-from pipecat.services.google.gemini_live.llm import GeminiLiveLLMService, GeminiLiveContext
+from pipecat.services.google.gemini_live.llm import GeminiLiveLLMService
 from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketParams,
     FastAPIWebsocketTransport,
@@ -130,25 +128,23 @@ async def create_pipeline(
 
     gemini = GeminiLiveLLMService(
         api_key=os.environ["GEMINI_API_KEY"],
-        model="gemini-2.0-flash-live-001",
-        system_instruction=build_system_prompt(session.current_step),
-        voice_id="Charon",
+        settings=GeminiLiveLLMService.Settings(
+            model="gemini-2.0-flash-live-001",
+            system_instruction=build_system_prompt(session.current_step),
+            voice="Charon",
+        ),
     )
 
     workflow = WorkflowProcessor(session=session, gemini_service=gemini)
 
-    # Context sets up the conversation — no initial user message needed
-    context = GeminiLiveContext()
-    context_aggregator = gemini.create_context_aggregator(context)
-
+    # Gemini Live manages its own conversation context via the bidi stream;
+    # no context aggregator is needed.
     pipeline = Pipeline(
         [
-            transport.input(),             # audio/video from browser
-            context_aggregator.user(),     # accumulates user turns
-            gemini,                        # Gemini Live reasoning + speech
-            workflow,                      # FSM state transitions
-            context_aggregator.assistant(),# accumulates assistant turns
-            transport.output(),            # audio back to browser
+            transport.input(),   # audio from browser
+            gemini,              # Gemini Live reasoning + speech output
+            workflow,            # FSM state transitions
+            transport.output(),  # audio back to browser
         ]
     )
 
