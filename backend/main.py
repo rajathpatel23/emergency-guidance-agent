@@ -136,28 +136,23 @@ async def stream(websocket: WebSocket, session_id: str):
                         raw = await websocket.receive_text()
                         msg = json.loads(raw)
 
-                        match msg.get("type"):
-                            case "frame":
-                                frame_bytes = base64.b64decode(msg["data"])
-                                await gemini.send_frame(frame_bytes)
-
-                            case "audio":
-                                audio_bytes = base64.b64decode(msg["data"])
-                                await gemini.send_audio(audio_bytes)
-
-                            case "transcript":
-                                last_transcript = msg.get("text", "")
-                                await gemini.send_text(last_transcript)
-
-                            case "user.done":
-                                _handle_user_action(session, "done")
-
-                            case "user.repeat":
-                                _handle_user_action(session, "repeat")
-
-                            case "end":
-                                end_session(session_id)
-                                return
+                        msg_type = msg.get("type")
+                        if msg_type == "frame":
+                            frame_bytes = base64.b64decode(msg["data"])
+                            await gemini.send_frame(frame_bytes)
+                        elif msg_type == "audio":
+                            audio_bytes = base64.b64decode(msg["data"])
+                            await gemini.send_audio(audio_bytes)
+                        elif msg_type == "transcript":
+                            last_transcript = msg.get("text", "")
+                            await gemini.send_text(last_transcript)
+                        elif msg_type == "user.done":
+                            _handle_user_action(session, "done")
+                        elif msg_type == "user.repeat":
+                            _handle_user_action(session, "repeat")
+                        elif msg_type == "end":
+                            end_session(session_id)
+                            return
 
                 except WebSocketDisconnect:
                     pass

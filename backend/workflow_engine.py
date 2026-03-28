@@ -75,7 +75,7 @@ class WorkflowDecision:
 def evaluate(
     session: SessionState,
     interpretation: ModelInterpretation,
-    user_action: str | None,  # "done" | "repeat" | None
+    user_action,  # "done" | "repeat" | None
 ) -> WorkflowDecision:
     """
     Decide what to do next based on session state, model interpretation,
