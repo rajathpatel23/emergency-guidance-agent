@@ -3,12 +3,10 @@ from typing import Literal
 
 WorkflowStep = Literal[
     "intake",
-    "check_responsiveness",
-    "call_emergency",
-    "position_hands",
-    "start_compressions",
-    "keep_rhythm",
-    "continue_loop",
+    "escalation",
+    "identify_injury",
+    "apply_pressure",
+    "maintain_pressure",
     "complete",
 ]
 
