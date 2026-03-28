@@ -12,6 +12,7 @@ from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.serializers.protobuf import ProtobufFrameSerializer
+from google.genai.types import HttpOptions
 from pipecat.services.google.gemini_live.llm import GeminiLiveLLMService
 from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketParams,
@@ -128,6 +129,7 @@ async def create_pipeline(
 
     gemini = GeminiLiveLLMService(
         api_key=os.environ["GEMINI_API_KEY"],
+        http_options=HttpOptions(api_version="v1alpha"),
         settings=GeminiLiveLLMService.Settings(
             model="gemini-2.0-flash-live-001",
             system_instruction=build_system_prompt(session.current_step),
