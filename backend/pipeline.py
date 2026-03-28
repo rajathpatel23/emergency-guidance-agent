@@ -131,7 +131,7 @@ async def create_pipeline(
         api_key=os.environ["GEMINI_API_KEY"],
         http_options=HttpOptions(api_version="v1alpha"),
         settings=GeminiLiveLLMService.Settings(
-            model="gemini-2.0-flash-live-001",
+            model="gemini-2.5-flash-native-audio-latest",
             system_instruction=build_system_prompt(session.current_step),
             voice="Charon",
         ),
