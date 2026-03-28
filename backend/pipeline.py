@@ -2,10 +2,13 @@ import os
 from loguru import logger
 
 from pipecat.frames.frames import (
+    AudioRawFrame,
     Frame,
     LLMFullResponseEndFrame,
+    StartFrame,
     TextFrame,
     TranscriptionFrame,
+    TTSAudioRawFrame,
 )
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
@@ -45,7 +48,13 @@ class WorkflowProcessor(FrameProcessor):
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
 
-        if isinstance(frame, TextFrame):
+        if isinstance(frame, StartFrame):
+            logger.info("[pipeline] StartFrame received — pipeline is live")
+
+        elif isinstance(frame, TTSAudioRawFrame):
+            logger.debug(f"[pipeline] audio frame flowing to browser  bytes={len(frame.audio)}")
+
+        elif isinstance(frame, TextFrame):
             self._buffer.append(frame.text)
 
         elif isinstance(frame, TranscriptionFrame):
