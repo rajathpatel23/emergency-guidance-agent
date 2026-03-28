@@ -48,7 +48,9 @@ async def stream(websocket: WebSocket, session_id: str):
     logger.info(f"[ws] connected  session={session_id[:8]}  step={session.current_step}")
 
     try:
+        logger.info(f"[ws] building pipeline for session={session_id[:8]}")
         runner, task = await create_pipeline(websocket, session)
+        logger.info(f"[ws] pipeline ready — starting runner")
         await runner.run(task)
     except Exception:
         import traceback
