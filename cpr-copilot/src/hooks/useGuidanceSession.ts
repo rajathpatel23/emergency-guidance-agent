@@ -1,5 +1,7 @@
 import { useRef, useState, useCallback } from "react";
 import { PipecatClient } from "@pipecat-ai/client-js";
+import { WebSocketTransport } from "@pipecat-ai/websocket-transport";
+import { ProtobufFrameSerializerCompat } from "@/lib/protobufSerializerCompat";
 import { type TranscriptEntry } from "@/components/TranscriptPanel";
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "http://localhost:8000") as string;
@@ -39,6 +41,7 @@ const INITIAL: SessionState = {
 
 export function useGuidanceSession() {
   const clientRef = useRef<PipecatClient | null>(null);
+  const transportRef = useRef<WebSocketTransport | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameIntervalRef = useRef<number | null>(null);
@@ -56,10 +59,10 @@ export function useGuidanceSession() {
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Video frame capture — sends JPEG frames via Pipecat client messages
+  // Video frame capture — sends JPEG frames as raw WebSocket messages
   // ---------------------------------------------------------------------------
 
-  const startFrameCapture = useCallback((client: PipecatClient) => {
+  const startFrameCapture = useCallback((transport: WebSocketTransport) => {
     if (!canvasRef.current) {
       const c = document.createElement("canvas");
       c.width = 640;
@@ -81,8 +84,7 @@ export function useGuidanceSession() {
             let binary = "";
             bytes.forEach((b) => (binary += String.fromCharCode(b)));
             const b64 = btoa(binary);
-            // Send as a custom app message alongside the audio pipeline
-            client.sendMessage({ type: "frame", data: b64 });
+            transport.sendRawMessage({ type: "frame", data: b64 });
           });
         },
         "image/jpeg",
@@ -117,7 +119,10 @@ export function useGuidanceSession() {
       return;
     }
 
-    // 2. Request camera stream (video only — Pipecat handles mic)
+    // 2. Camera only for preview. Pipecat's transport opens a *separate* mic
+    //    stream on connect (see WebSocketTransport.initDevices → WavRecorder.begin).
+    //    If we also grab the microphone here, many browsers fail the second
+    //    capture or leave it silent — so Gemini never "hears" you.
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: 640, height: 480, facingMode: "environment" },
@@ -128,25 +133,29 @@ export function useGuidanceSession() {
       }
     } catch {
       setState(INITIAL);
-      addEntry("system", "Camera access is required. Please allow camera access and try again.");
+      addEntry("system", "Camera access is required. Please allow the camera and try again.");
       return;
     }
 
-    // 3. Connect Pipecat client (handles mic capture + audio pipeline)
-    const client = new PipecatClient({
-      transport: {
-        url: `${WS_BASE}/ws/stream/${sessionId}`,
-        enableMic: true,
-        enableCam: false, // we handle video frames manually
-      } as any,
+    // 3. Build Pipecat WebSocket transport with protobuf serialization
+    const transport = new WebSocketTransport({
+      wsUrl: `${WS_BASE}/ws/stream/${sessionId}`,
+      serializer: new ProtobufFrameSerializerCompat(),
+      recorderSampleRate: 16000, // must match Pipecat default / Gemini Live input
+      playerSampleRate: 24000, // Gemini Live TTS output
     });
+    transportRef.current = transport;
 
+    const client = new PipecatClient({
+      transport,
+      enableMic: true,
+    });
     clientRef.current = client;
 
     client.on("connected", () => {
       setState((prev) => ({ ...prev, sessionId, status: "listening" }));
       addEntry("system", "Session started. I am watching and listening.");
-      startFrameCapture(client);
+      startFrameCapture(transport);
     });
 
     client.on("disconnected", () => {
@@ -168,17 +177,30 @@ export function useGuidanceSession() {
       setState((prev) => ({ ...prev, status: "thinking" }));
     });
 
-    client.on("botTranscript", (data: { text: string }) => {
-      setState((prev) => ({ ...prev, currentInstruction: data.text }));
-      addEntry("system", data.text);
+    const pushBotText = (raw: unknown) => {
+      const text =
+        typeof raw === "string"
+          ? raw
+          : raw && typeof raw === "object" && "text" in raw
+            ? String((raw as { text: string }).text)
+            : "";
+      if (!text.trim()) return;
+      setState((prev) => ({ ...prev, currentInstruction: text }));
+      addEntry("system", text);
+    };
+
+    // Prefer botOutput (current); botTranscript is deprecated in client-js but still wire it.
+    client.on("botOutput", pushBotText);
+    client.on("botTranscript", pushBotText);
+
+    client.on("userTranscript", (data: { text?: string; final?: boolean }) => {
+      const t = data.text?.trim();
+      if (!t) return;
+      if (data.final) addEntry("user", t);
     });
 
-    client.on("userTranscript", (data: { text: string; final: boolean }) => {
-      if (data.final) addEntry("user", data.text);
-    });
-
-    // Custom app messages from backend (state updates, step changes)
-    client.on("appMessage", (msg: Record<string, unknown>) => {
+    // State updates pushed from backend workflow engine
+    client.on("serverMessage", (msg: Record<string, unknown>) => {
       if (msg.type === "state_update") {
         setState((prev) => ({
           ...prev,
@@ -190,17 +212,37 @@ export function useGuidanceSession() {
       }
     });
 
-    client.on("error", (err: Error) => {
-      addEntry("system", `Error: ${err.message}`);
+    client.on("error", (err: { data?: unknown; type?: string }) => {
+      const msg = err?.data !== undefined ? JSON.stringify(err.data) : (err?.type ?? "unknown error");
+      addEntry("system", `Error: ${msg}`);
     });
 
-    await client.connect();
+    try {
+      // Open microphone before WS so permission errors are obvious; connect() also calls
+      // initDevices when needed, but explicit call gives a clearer failure mode.
+      await client.initDevices();
+      await client.connect();
+    } catch (e) {
+      stopFrameCapture();
+      clientRef.current = null;
+      transportRef.current = null;
+      const video = videoRef.current;
+      if (video?.srcObject) {
+        (video.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
+        video.srcObject = null;
+      }
+      setState(INITIAL);
+      const message =
+        e instanceof Error ? e.message : "Could not start voice session (check mic permission).";
+      addEntry("system", message);
+    }
   }, [addEntry, startFrameCapture, stopFrameCapture]);
 
   const end = useCallback(() => {
     stopFrameCapture();
     clientRef.current?.disconnect();
     clientRef.current = null;
+    transportRef.current = null;
 
     // Stop camera stream
     const video = videoRef.current;
@@ -214,32 +256,34 @@ export function useGuidanceSession() {
   }, [addEntry, stopFrameCapture]);
 
   // ---------------------------------------------------------------------------
-  // User actions — sent as app messages, backend workflow engine handles them
+  // User actions — sent as RTVIMessages, backend workflow engine handles them
   // ---------------------------------------------------------------------------
 
-  const sendAction = useCallback(
-    (type: string, extra?: Record<string, unknown>) => {
-      clientRef.current?.sendMessage({ type, ...extra });
-    },
-    [],
-  );
+  /** RTVI client-message — backend can handle types like user.done / user.repeat if wired. */
+  const sendAction = useCallback((type: string, extra?: Record<string, unknown>) => {
+    clientRef.current?.sendClientMessage(type, extra ?? {});
+  }, []);
 
   const sendDone = useCallback(() => {
-    sendAction("user.done");
+    sendAction("user.done", {});
     addEntry("user", "Done.");
   }, [sendAction, addEntry]);
 
   const sendRepeat = useCallback(() => {
-    sendAction("user.repeat");
+    sendAction("user.repeat", {});
     addEntry("user", "Please repeat.");
   }, [sendAction, addEntry]);
 
+  /**
+   * Browser Web Speech → Gemini via RTVI `send-text` (not the removed sendMessage API).
+   */
   const sendTranscript = useCallback(
     (text: string) => {
-      sendAction("transcript", { text });
+      const client = clientRef.current;
+      if (client) void client.sendText(text);
       addEntry("user", text);
     },
-    [sendAction, addEntry],
+    [addEntry],
   );
 
   return {

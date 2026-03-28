@@ -1,32 +1,30 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 WorkflowStep = Literal[
     "intake",
-    "check_responsiveness",
-    "call_emergency",
-    "position_hands",
+    "escalation",
+    "see_patient",
     "start_compressions",
-    "keep_rhythm",
-    "continue_loop",
+    "continue_cpr",
     "complete",
 ]
 
 ViewQuality = Literal["unknown", "clear", "unclear"]
-PressureSignal = Literal["unknown", "yes", "no"]
+CompressionSignal = Literal["unknown", "yes", "no"]
 SessionStatus = Literal["active", "ended"]
 
 
 @dataclass
 class SessionState:
     session_id: str
-    scenario: str = "bleeding_control"
+    scenario: str = "cpr_coaching"
     language: str = "en"
     current_step: WorkflowStep = "intake"
     called_emergency: bool = False
     view_quality: ViewQuality = "unknown"
-    injury_visible: bool = False
-    pressure_applied: PressureSignal = "unknown"
+    patient_visible: bool = False
+    compressions_detected: CompressionSignal = "unknown"
     last_instruction: str = ""
     step_attempts: int = 0
     status: SessionStatus = "active"
@@ -39,8 +37,8 @@ class SessionState:
             "current_step": self.current_step,
             "called_emergency": self.called_emergency,
             "view_quality": self.view_quality,
-            "injury_visible": self.injury_visible,
-            "pressure_applied": self.pressure_applied,
+            "patient_visible": self.patient_visible,
+            "compressions_detected": self.compressions_detected,
             "last_instruction": self.last_instruction,
             "step_attempts": self.step_attempts,
             "status": self.status,
@@ -49,9 +47,9 @@ class SessionState:
 
 @dataclass
 class ModelInterpretation:
-    person_visible: bool = False       # patient visible in frame
+    person_visible: bool = False       # victim / chest visible in frame
     view_unclear: bool = False         # camera angle insufficient
-    hands_positioned: bool = False     # hands on center of chest
+    hands_positioned: bool = False     # hands on center of the chest
     compressions_happening: bool = False  # user appears to be compressing
     person_responsive: bool = False    # patient shows signs of response
     suggested_instruction: str = ""

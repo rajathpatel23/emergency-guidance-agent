@@ -2,18 +2,18 @@ const STEP_LABELS: Record<string, { label: string; color: string }> = {
   idle: { label: "STANDBY", color: "bg-muted text-muted-foreground" },
   intake: { label: "ASSESS", color: "bg-warning/15 text-warning border border-warning/30" },
   escalation: { label: "CALL 911", color: "bg-emergency/15 text-emergency border border-emergency/30 pulse-emergency" },
-  identify_injury: { label: "VIEW", color: "bg-warning/15 text-warning border border-warning/30" },
-  apply_pressure: { label: "PRESSURE", color: "bg-emergency/15 text-emergency border border-emergency/30" },
-  maintain_pressure: { label: "HOLD", color: "bg-emergency/15 text-emergency border border-emergency/30 pulse-emergency" },
+  see_patient: { label: "VIEW", color: "bg-warning/15 text-warning border border-warning/30" },
+  start_compressions: { label: "CPR", color: "bg-emergency/15 text-emergency border border-emergency/30" },
+  continue_cpr: { label: "CONTINUE", color: "bg-emergency/15 text-emergency border border-emergency/30 pulse-emergency" },
   complete: { label: "COMPLETE", color: "bg-success/15 text-success border border-success/30" },
 };
 
 const STEPS_ORDER = [
   "intake",
   "escalation",
-  "identify_injury",
-  "apply_pressure",
-  "maintain_pressure",
+  "see_patient",
+  "start_compressions",
+  "continue_cpr",
   "complete",
 ];
 

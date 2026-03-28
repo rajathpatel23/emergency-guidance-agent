@@ -3,9 +3,9 @@
  * The app still owns state transitions — no step hint field intentionally.
  */
 export interface ModelInterpretation {
-  injury_visible?: boolean;
+  patient_visible?: boolean;
   view_unclear?: boolean;
-  pressure_applied?: boolean;
+  compressions_detected?: boolean;
   suggested_instruction?: string;
   language_detected?: string;
   transcript_summary?: string;

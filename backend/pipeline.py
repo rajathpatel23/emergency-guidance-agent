@@ -1,20 +1,23 @@
 import os
 from loguru import logger
 
-from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.frames.frames import (
     AudioRawFrame,
     Frame,
     LLMFullResponseEndFrame,
+    StartFrame,
     TextFrame,
     TranscriptionFrame,
+    TTSAudioRawFrame,
 )
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
+from pipecat.processors.aggregators.llm_response_universal import LLMContext
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.serializers.protobuf import ProtobufFrameSerializer
-from pipecat.services.google.gemini_live.llm import GeminiLiveLLMService, GeminiLiveContext
+from google.genai.types import HttpOptions
+from pipecat.services.google.gemini_live.llm import GeminiLiveLLMService
 from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketParams,
     FastAPIWebsocketTransport,
@@ -23,19 +26,17 @@ from pipecat.transports.websocket.fastapi import (
 from models import ModelInterpretation, SessionState
 from prompts import build_system_prompt, step_context_message
 from session_manager import update_session
-from workflow_engine import apply_decision, current_config, evaluate, step_number, TOTAL_STEPS
+from workflow_engine import apply_decision, evaluate, TOTAL_STEPS
 
 
 # ---------------------------------------------------------------------------
 # Workflow frame processor
-# Sits after Gemini in the pipeline, intercepts text output, runs FSM
 # ---------------------------------------------------------------------------
 
 class WorkflowProcessor(FrameProcessor):
     """
-    Intercepts completed Gemini text turns, runs the workflow engine,
-    updates session state, and injects step-context turns when the step
-    advances so Gemini stays aligned.
+    Intercepts completed Gemini turns, runs the workflow FSM, and injects
+    step-context messages when the step advances.
     """
 
     def __init__(self, session: SessionState, gemini_service: GeminiLiveLLMService):
@@ -47,7 +48,13 @@ class WorkflowProcessor(FrameProcessor):
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
 
-        if isinstance(frame, TextFrame):
+        if isinstance(frame, StartFrame):
+            logger.info("[pipeline] StartFrame received — pipeline is live")
+
+        elif isinstance(frame, TTSAudioRawFrame):
+            logger.debug(f"[pipeline] audio frame flowing to browser  bytes={len(frame.audio)}")
+
+        elif isinstance(frame, TextFrame):
             self._buffer.append(frame.text)
 
         elif isinstance(frame, TranscriptionFrame):
@@ -77,7 +84,7 @@ class WorkflowProcessor(FrameProcessor):
             session.session_id,
             current_step=session.current_step,
             step_attempts=session.step_attempts,
-            injury_visible=interp.person_visible,
+            patient_visible=interp.person_visible,
             view_quality="unclear" if interp.view_unclear else "clear",
         )
 
@@ -86,23 +93,68 @@ class WorkflowProcessor(FrameProcessor):
                 f"[workflow] {prev_step} → {session.current_step} "
                 f"(reason: {decision.reason})"
             )
-            # Inject step context so Gemini knows the new objective
             context_msg = step_context_message(session.current_step)
             await self._gemini.push_frame(TextFrame(context_msg))
 
 
 # ---------------------------------------------------------------------------
-# Heuristic interpretation (same as before, kept here to avoid circular import)
+# Heuristic interpretation
 # ---------------------------------------------------------------------------
 
 def _extract_interpretation(model_text: str, transcript: str = "") -> ModelInterpretation:
     combined = (model_text + " " + transcript).lower()
     return ModelInterpretation(
-        person_visible=any(w in combined for w in ["person", "patient", "body", "chest", "lying"]),
-        view_unclear=any(w in combined for w in ["cannot see", "can't see", "unclear", "move the camera", "closer", "better angle", "show me"]),
-        hands_positioned=any(w in combined for w in ["hands", "positioned", "center of the chest", "placed"]),
-        compressions_happening=any(w in combined for w in ["pressing", "compressions", "pushing", "pumping"]),
-        person_responsive=any(w in combined for w in ["responsive", "breathing", "moving", "conscious"]),
+        person_visible=any(
+            w in combined
+            for w in [
+                "person",
+                "patient",
+                "victim",
+                "body",
+                "chest",
+                "lying",
+                "on the floor",
+                "unresponsive",
+                "not breathing",
+            ]
+        ),
+        view_unclear=any(
+            w in combined
+            for w in [
+                "cannot see",
+                "can't see",
+                "unclear",
+                "move the camera",
+                "closer",
+                "better angle",
+                "show me",
+            ]
+        ),
+        hands_positioned=any(
+            w in combined
+            for w in [
+                "hands",
+                "heel",
+                "stacked",
+                "center of the chest",
+                "sternum",
+                "placed",
+                "interlocked",
+            ]
+        ),
+        compressions_happening=any(
+            w in combined
+            for w in [
+                "compressions",
+                "compressing",
+                "pushing",
+                "pumping",
+                "pressing",
+                "cpr",
+                "push hard",
+            ]
+        ),
+        person_responsive=any(w in combined for w in ["responsive", "breathing", "moving", "conscious", "coughing"]),
         transcript_summary=transcript,
     )
 
@@ -115,40 +167,52 @@ async def create_pipeline(
     websocket,
     session: SessionState,
 ) -> tuple[PipelineRunner, PipelineTask]:
-    """
-    Build and return a Pipecat pipeline for one WebSocket session.
-    Call runner.run(task) to start it.
-    """
 
     transport = FastAPIWebsocketTransport(
         websocket=websocket,
         params=FastAPIWebsocketParams(
             serializer=ProtobufFrameSerializer(),
             add_wav_header=False,
+            # TransportParams defaults audio_in/out to False — mic and TTS are dropped.
+            audio_in_enabled=True,
+            audio_in_sample_rate=16000,
+            audio_out_enabled=True,
+            audio_out_sample_rate=24000,
         ),
     )
 
+    # Use a Live-native-audio model + v1alpha — see Pipecat GeminiLiveLLMService defaults.
+    # Aliases like "gemini-2.0-flash-live-001" or "*-latest" often 404 or fail on BidiGenerateContent.
+    live_model = os.getenv(
+        "GEMINI_LIVE_MODEL",
+        "models/gemini-2.5-flash-native-audio-preview-12-2025",
+    )
     gemini = GeminiLiveLLMService(
         api_key=os.environ["GEMINI_API_KEY"],
-        model="gemini-2.0-flash-live-001",
-        system_instruction=build_system_prompt(session.current_step),
-        voice_id="Charon",
+        http_options=HttpOptions(api_version="v1alpha"),
+        settings=GeminiLiveLLMService.Settings(
+            model=live_model,
+            system_instruction=build_system_prompt(session.current_step),
+            voice="Charon",
+        ),
     )
+
+    # Seed the context with a minimal user message so _create_initial_response()
+    # sends a real turn_complete to Gemini when the session connects, causing it
+    # to speak the opening line immediately without waiting for user input.
+    seed_context = LLMContext(
+        messages=[{"role": "user", "content": "begin"}]
+    )
+    await gemini.set_context(seed_context)  # type: ignore[arg-type]
 
     workflow = WorkflowProcessor(session=session, gemini_service=gemini)
 
-    # Context sets up the conversation — no initial user message needed
-    context = GeminiLiveContext()
-    context_aggregator = gemini.create_context_aggregator(context)
-
     pipeline = Pipeline(
         [
-            transport.input(),             # audio/video from browser
-            context_aggregator.user(),     # accumulates user turns
-            gemini,                        # Gemini Live reasoning + speech
-            workflow,                      # FSM state transitions
-            context_aggregator.assistant(),# accumulates assistant turns
-            transport.output(),            # audio back to browser
+            transport.input(),   # audio from browser
+            gemini,              # Gemini Live reasoning + speech output
+            workflow,            # FSM state transitions
+            transport.output(),  # audio back to browser
         ]
     )
 

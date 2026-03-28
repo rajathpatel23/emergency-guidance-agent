@@ -9,33 +9,33 @@ const STEP_META: Record<string, { title: string; fallback: string; detail: strin
   },
   intake: {
     title: "Assess the Scene",
-    fallback: "Show me the injury and tell me what happened",
-    detail: "Describe what you see and how severe the bleeding appears.",
+    fallback: "Tell me what happened—is the person breathing and responsive?",
+    detail: "Say if they’re awake, breathing, or unresponsive so we can coach the right steps.",
   },
   escalation: {
     title: "Call for Help",
     fallback: "Call emergency services now if you have not already",
     detail: "If someone else is present, ask them to call. Put the phone on speaker.",
   },
-  identify_injury: {
-    title: "View the Injury",
-    fallback: "Move the camera closer to the bleeding area",
-    detail: "We need a clear view of the wound to guide the next step.",
+  see_patient: {
+    title: "View the Patient",
+    fallback: "Show me the person on their back—chest visible if you can",
+    detail: "We need a clear, steady view to coach hand placement and compressions.",
   },
-  apply_pressure: {
-    title: "Apply Pressure",
-    fallback: "Press firmly on the wound with a clean cloth or towel now",
-    detail: "Cover the wound and press directly on the bleeding site.",
+  start_compressions: {
+    title: "Start Compressions",
+    fallback: "Hands on the center of the chest—push hard and fast",
+    detail: "Heel of one hand, other on top, shoulders over hands, full recoil between pushes.",
   },
-  maintain_pressure: {
-    title: "Maintain Pressure",
-    fallback: "Keep steady pressure — do not lift the cloth to look",
-    detail: "If blood soaks through, place more cloth on top and keep pressing.",
+  continue_cpr: {
+    title: "Keep Going",
+    fallback: "Stay at 100 to 120 compressions per minute—depth and full chest rise",
+    detail: "Switch with another rescuer about every two minutes if you can. Minimal pauses.",
   },
   complete: {
     title: "Help on the Way",
-    fallback: "Keep pressure on the wound until help arrives",
-    detail: "Brief responders on what happened when they arrive.",
+    fallback: "Continue CPR until EMS takes over or the person responds",
+    detail: "When responders arrive, tell them how long CPR was in progress.",
   },
 };
 
@@ -71,7 +71,7 @@ const InstructionPanel = ({ currentStep, liveInstruction, uncertain }: Instructi
         )}
       </div>
 
-      {currentStep === "apply_pressure" && (
+      {currentStep === "start_compressions" && (
         <div className="flex items-center gap-3 p-3 rounded-lg bg-emergency/10 border border-emergency/20">
           <div className="w-3 h-3 rounded-full bg-emergency pulse-emergency" />
           <span className="text-sm font-mono text-emergency">100–120 BPM — Push to the beat</span>

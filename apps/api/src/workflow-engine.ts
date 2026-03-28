@@ -22,34 +22,36 @@ export function decideAfterModel(
   if (step === "intake") {
     const hasContext =
       Boolean(interpretation?.transcript_summary?.trim()) ||
-      Boolean(interpretation?.injury_visible);
+      Boolean(interpretation?.patient_visible);
     if (hasContext) return { kind: "advance", next: "escalation" };
     return { kind: "stay", step: "intake" };
   }
 
   if (step === "escalation") {
-    return { kind: "advance", next: "identify_injury" };
+    if (state.step_attempts >= 1) return { kind: "advance", next: "see_patient" };
+    return { kind: "repeat", step: "escalation" };
   }
 
-  if (step === "identify_injury") {
+  if (step === "see_patient") {
     if (interpretation?.view_unclear || state.view_quality === "unclear") {
-      return { kind: "repeat", step: "identify_injury" };
+      return { kind: "repeat", step: "see_patient" };
     }
-    if (interpretation?.injury_visible === true || state.injury_visible) {
-      return { kind: "advance", next: "apply_pressure" };
+    if (interpretation?.patient_visible === true || state.patient_visible) {
+      return { kind: "advance", next: "start_compressions" };
     }
-    return { kind: "repeat", step: "identify_injury" };
+    return { kind: "repeat", step: "see_patient" };
   }
 
-  if (step === "apply_pressure") {
-    const pressure =
-      interpretation?.pressure_applied === true || state.pressure_applied === "yes";
-    if (pressure) return { kind: "advance", next: "maintain_pressure" };
-    return { kind: "repeat", step: "apply_pressure" };
+  if (step === "start_compressions") {
+    const compressions =
+      interpretation?.compressions_detected === true || state.compressions_detected === "yes";
+    if (compressions) return { kind: "advance", next: "continue_cpr" };
+    return { kind: "repeat", step: "start_compressions" };
   }
 
-  if (step === "maintain_pressure") {
-    return { kind: "advance", next: "complete" };
+  if (step === "continue_cpr") {
+    if (state.step_attempts >= 2) return { kind: "advance", next: "complete" };
+    return { kind: "repeat", step: "continue_cpr" };
   }
 
   return { kind: "stay", step: "complete" };
