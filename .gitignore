@@ -7,3 +7,5 @@ build/
 .DS_Store
 coverage/
 backend/.venv/
+frontend/__pycache__/
+backend/__pycache__/*
