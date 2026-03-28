@@ -1,9 +1,11 @@
+import asyncio
 import os
 from loguru import logger
 
 from pipecat.frames.frames import (
     Frame,
     LLMFullResponseEndFrame,
+    StartFrame,
     TextFrame,
     TranscriptionFrame,
 )
@@ -46,7 +48,15 @@ class WorkflowProcessor(FrameProcessor):
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
 
-        if isinstance(frame, TextFrame):
+        if isinstance(frame, StartFrame):
+            # Give Gemini ~1s to establish the bidi connection, then kick off
+            # the conversation with the first step's instruction.
+            asyncio.get_event_loop().call_later(
+                1.0,
+                lambda: asyncio.ensure_future(self._send_greeting()),
+            )
+
+        elif isinstance(frame, TextFrame):
             self._buffer.append(frame.text)
 
         elif isinstance(frame, TranscriptionFrame):
@@ -64,6 +74,13 @@ class WorkflowProcessor(FrameProcessor):
                 await self._run_engine(interp)
 
         await self.push_frame(frame, direction)
+
+    async def _send_greeting(self):
+        """Push the opening instruction to Gemini to start the conversation."""
+        from prompts import step_context_message
+        opening = step_context_message(self._session.current_step)
+        logger.info("[workflow] sending opening trigger to Gemini")
+        await self._gemini.push_frame(TextFrame(opening))
 
     async def _run_engine(self, interp: ModelInterpretation):
         session = self._session
@@ -130,6 +147,11 @@ async def create_pipeline(
     gemini = GeminiLiveLLMService(
         api_key=os.environ["GEMINI_API_KEY"],
         http_options=HttpOptions(api_version="v1alpha"),
+        # inference_on_context_initialization=True (default) sends an empty
+        # send_client_content(turns=[], turn_complete=True) which crashes
+        # gemini-2.5 with error 1007. Disable it; we trigger the first turn
+        # manually via WorkflowProcessor._send_greeting() after connection.
+        inference_on_context_initialization=False,
         settings=GeminiLiveLLMService.Settings(
             model="gemini-2.5-flash-native-audio-latest",
             system_instruction=build_system_prompt(session.current_step),
