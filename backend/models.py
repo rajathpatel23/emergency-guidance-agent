@@ -3,10 +3,12 @@ from typing import Literal
 
 WorkflowStep = Literal[
     "intake",
-    "escalation",
-    "identify_injury",
-    "apply_pressure",
-    "maintain_pressure",
+    "check_responsiveness",
+    "call_emergency",
+    "position_hands",
+    "start_compressions",
+    "keep_rhythm",
+    "continue_loop",
     "complete",
 ]
 
@@ -47,9 +49,11 @@ class SessionState:
 
 @dataclass
 class ModelInterpretation:
-    injury_visible: bool = False
-    view_unclear: bool = False
-    pressure_applied: bool = False
+    person_visible: bool = False       # patient visible in frame
+    view_unclear: bool = False         # camera angle insufficient
+    hands_positioned: bool = False     # hands on center of chest
+    compressions_happening: bool = False  # user appears to be compressing
+    person_responsive: bool = False    # patient shows signs of response
     suggested_instruction: str = ""
     language_detected: str = "en"
     transcript_summary: str = ""

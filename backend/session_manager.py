@@ -12,11 +12,11 @@ def create_session() -> SessionState:
     return session
 
 
-def get_session(session_id: str) -> SessionState | None:
+def get_session(session_id: str):
     return _store.get(session_id)
 
 
-def update_session(session_id: str, **kwargs) -> SessionState | None:
+def update_session(session_id: str, **kwargs):
     session = _store.get(session_id)
     if not session:
         return None
