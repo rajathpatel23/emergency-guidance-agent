@@ -1,58 +1,47 @@
 import { AlertTriangle } from "lucide-react";
 
+/** Step ids match backend `workflow_engine.STATES` */
 const STEP_META: Record<string, { title: string; fallback: string; detail: string }> = {
   idle: {
     title: "Ready",
     fallback: "Press 'Start CPR Mode' to begin",
-    detail: "Ensure you are safe and the patient is on a flat surface.",
+    detail: "Ensure you are safe and the scene is safe before you begin.",
   },
   intake: {
     title: "Assess the Scene",
-    fallback: "Check if the person is responsive",
-    detail: "Tap their shoulders and shout 'Are you okay?' Look for signs of breathing.",
+    fallback: "Show me the injury and tell me what happened",
+    detail: "Describe what you see and how severe the bleeding appears.",
   },
-  check_responsiveness: {
-    title: "Check Responsiveness",
-    fallback: "Tap their shoulders and ask if they are okay",
-    detail: "Look for signs of breathing or movement.",
-  },
-  call_emergency: {
+  escalation: {
     title: "Call for Help",
-    fallback: "Call emergency services now",
+    fallback: "Call emergency services now if you have not already",
     detail: "If someone else is present, ask them to call. Put the phone on speaker.",
   },
-  position_hands: {
-    title: "Position Hands",
-    fallback: "Place your hands in the center of the chest",
-    detail: "Heel of one hand on the breastbone, interlock fingers, arms straight.",
+  identify_injury: {
+    title: "View the Injury",
+    fallback: "Move the camera closer to the bleeding area",
+    detail: "We need a clear view of the wound to guide the next step.",
   },
-  start_compressions: {
-    title: "Begin Compressions",
-    fallback: "Push hard and fast — at least 2 inches deep",
-    detail: "100–120 compressions per minute. Let the chest fully rise between compressions.",
+  apply_pressure: {
+    title: "Apply Pressure",
+    fallback: "Press firmly on the wound with a clean cloth or towel now",
+    detail: "Cover the wound and press directly on the bleeding site.",
   },
-  keep_rhythm: {
-    title: "Keep Rhythm",
-    fallback: "Keep a steady pace — push to the beat",
-    detail: "Do not stop. Push hard, push fast. Count aloud if it helps.",
-  },
-  continue_loop: {
-    title: "Continue CPR",
-    fallback: "Keep going — do not stop until help arrives",
-    detail: "30 compressions, then 2 rescue breaths. Repeat the cycle.",
+  maintain_pressure: {
+    title: "Maintain Pressure",
+    fallback: "Keep steady pressure — do not lift the cloth to look",
+    detail: "If blood soaks through, place more cloth on top and keep pressing.",
   },
   complete: {
-    title: "Help Has Arrived",
-    fallback: "Transfer care to emergency services",
-    detail: "Brief the paramedics on what happened and how long you performed CPR.",
+    title: "Help on the Way",
+    fallback: "Keep pressure on the wound until help arrives",
+    detail: "Brief responders on what happened when they arrive.",
   },
 };
 
-const RHYTHM_STEPS = ["start_compressions", "keep_rhythm", "continue_loop"];
-
 interface InstructionPanelProps {
   currentStep: string;
-  /** Live instruction from Gemini — overrides fallback text when present */
+  /** Live instruction from the model — overrides fallback when present */
   liveInstruction?: string;
   uncertain?: boolean;
 }
@@ -76,22 +65,16 @@ const InstructionPanel = ({ currentStep, liveInstruction, uncertain }: Instructi
       </div>
 
       <div className="flex-1 flex flex-col justify-center gap-4">
-        <p className="text-2xl font-bold leading-tight text-foreground">
-          {instruction}
-        </p>
-        {!liveInstruction && (
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            {meta.detail}
-          </p>
+        <p className="text-2xl font-bold leading-tight text-foreground">{instruction}</p>
+        {!liveInstruction?.trim() && (
+          <p className="text-sm leading-relaxed text-muted-foreground">{meta.detail}</p>
         )}
       </div>
 
-      {RHYTHM_STEPS.includes(currentStep) && (
+      {currentStep === "apply_pressure" && (
         <div className="flex items-center gap-3 p-3 rounded-lg bg-emergency/10 border border-emergency/20">
           <div className="w-3 h-3 rounded-full bg-emergency pulse-emergency" />
-          <span className="text-sm font-mono text-emergency">
-            100–120 BPM — Push to the beat
-          </span>
+          <span className="text-sm font-mono text-emergency">100–120 BPM — Push to the beat</span>
         </div>
       )}
     </div>
