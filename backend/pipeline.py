@@ -10,7 +10,7 @@ from pipecat.frames.frames import (
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
-from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
+from pipecat.processors.aggregators.llm_response_universal import LLMContext
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.serializers.protobuf import ProtobufFrameSerializer
 from google.genai.types import HttpOptions
@@ -134,10 +134,10 @@ async def create_pipeline(
     # Seed the context with a minimal user message so _create_initial_response()
     # sends a real turn_complete to Gemini when the session connects, causing it
     # to speak the opening line immediately without waiting for user input.
-    seed_context = OpenAILLMContext(
+    seed_context = LLMContext(
         messages=[{"role": "user", "content": "begin"}]
     )
-    await gemini.set_context(seed_context)
+    await gemini.set_context(seed_context)  # type: ignore[arg-type]
 
     workflow = WorkflowProcessor(session=session, gemini_service=gemini)
 
