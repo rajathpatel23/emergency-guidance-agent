@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback } from "react";
+import { PipecatClient } from "@pipecat-ai/client-js";
 import { type TranscriptEntry } from "@/components/TranscriptPanel";
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "http://localhost:8000") as string;
@@ -37,17 +38,12 @@ const INITIAL: SessionState = {
 };
 
 export function useGuidanceSession() {
-  const wsRef = useRef<WebSocket | null>(null);
+  const clientRef = useRef<PipecatClient | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameIntervalRef = useRef<number | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
 
   const [state, setState] = useState<SessionState>(INITIAL);
-
-  // ---------------------------------------------------------------------------
-  // Transcript helpers
-  // ---------------------------------------------------------------------------
 
   const addEntry = useCallback((role: "system" | "user", text: string) => {
     setState((prev) => ({
@@ -60,10 +56,10 @@ export function useGuidanceSession() {
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Frame capture — grabs JPEG from camera every 1s and sends over WebSocket
+  // Video frame capture — sends JPEG frames via Pipecat client messages
   // ---------------------------------------------------------------------------
 
-  const startFrameCapture = useCallback(() => {
+  const startFrameCapture = useCallback((client: PipecatClient) => {
     if (!canvasRef.current) {
       const c = document.createElement("canvas");
       c.width = 640;
@@ -75,19 +71,18 @@ export function useGuidanceSession() {
 
     frameIntervalRef.current = window.setInterval(() => {
       const video = videoRef.current;
-      const ws = wsRef.current;
-      if (!video || !ctx || !ws || ws.readyState !== WebSocket.OPEN || video.readyState < 2) return;
-
+      if (!video || !ctx || video.readyState < 2) return;
       ctx.drawImage(video, 0, 0, 640, 480);
       canvas.toBlob(
         (blob) => {
-          if (!blob || !ws || ws.readyState !== WebSocket.OPEN) return;
+          if (!blob) return;
           blob.arrayBuffer().then((buf) => {
             const bytes = new Uint8Array(buf);
             let binary = "";
             bytes.forEach((b) => (binary += String.fromCharCode(b)));
             const b64 = btoa(binary);
-            ws.send(JSON.stringify({ type: "frame", data: b64 }));
+            // Send as a custom app message alongside the audio pipeline
+            client.sendMessage({ type: "frame", data: b64 });
           });
         },
         "image/jpeg",
@@ -104,155 +99,148 @@ export function useGuidanceSession() {
   }, []);
 
   // ---------------------------------------------------------------------------
-  // WebSocket message handler
-  // ---------------------------------------------------------------------------
-
-  const handleMessage = useCallback(
-    (event: MessageEvent) => {
-      const msg = JSON.parse(event.data as string);
-
-      switch (msg.type) {
-        case "status":
-          setState((prev) => ({
-            ...prev,
-            status: "listening",
-            currentStep: msg.current_step ?? prev.currentStep,
-          }));
-          addEntry("system", "Session started. I am watching and listening.");
-          break;
-
-        case "text_chunk":
-          setState((prev) => ({ ...prev, status: "responding" }));
-          break;
-
-        case "instruction":
-          setState((prev) => ({
-            ...prev,
-            status: "listening",
-            currentStep: msg.current_step,
-            stepNumber: msg.step_number,
-            totalSteps: msg.total_steps,
-            currentInstruction: msg.instruction,
-            uncertain: msg.uncertain,
-            language: msg.language,
-          }));
-          addEntry("system", msg.instruction);
-          break;
-
-        case "state_update":
-          setState((prev) => ({ ...prev, currentStep: msg.current_step }));
-          break;
-
-        case "error":
-          addEntry("system", `Error: ${msg.message}`);
-          setState((prev) => ({ ...prev, status: "listening" }));
-          break;
-      }
-    },
-    [addEntry],
-  );
-
-  // ---------------------------------------------------------------------------
   // Session lifecycle
   // ---------------------------------------------------------------------------
 
   const start = useCallback(async () => {
     setState((prev) => ({ ...prev, status: "connecting", transcript: [] }));
 
-    // 1. Request camera + mic — both required
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480, facingMode: "environment" },
-        audio: true,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch {
-      setState(INITIAL);
-      addEntry("system", "Camera and microphone access are required. Please allow both and try again.");
-      return;
-    }
-
-    // 2. Create backend session
+    // 1. Create backend session
     let sessionId: string;
     try {
       const res = await fetch(`${API_BASE}/session`, { method: "POST" });
       const body = await res.json();
       sessionId = body.session_id;
     } catch {
-      stream.getTracks().forEach((t) => t.stop());
       setState(INITIAL);
       addEntry("system", "Could not reach the server. Make sure the backend is running.");
       return;
     }
 
-    // 3. Open WebSocket
-    const ws = new WebSocket(`${WS_BASE}/ws/stream/${sessionId}`);
-    wsRef.current = ws;
+    // 2. Request camera stream (video only — Pipecat handles mic)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480, facingMode: "environment" },
+        audio: false,
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch {
+      setState(INITIAL);
+      addEntry("system", "Camera access is required. Please allow camera access and try again.");
+      return;
+    }
 
-    ws.onopen = () => {
+    // 3. Connect Pipecat client (handles mic capture + audio pipeline)
+    const client = new PipecatClient({
+      transport: {
+        url: `${WS_BASE}/ws/stream/${sessionId}`,
+        enableMic: true,
+        enableCam: false, // we handle video frames manually
+      } as any,
+    });
+
+    clientRef.current = client;
+
+    client.on("connected", () => {
       setState((prev) => ({ ...prev, sessionId, status: "listening" }));
-      startFrameCapture();
-    };
+      addEntry("system", "Session started. I am watching and listening.");
+      startFrameCapture(client);
+    });
 
-    ws.onmessage = handleMessage;
-
-    ws.onerror = () => {
-      addEntry("system", "Connection lost. Please restart the session.");
-      setState((prev) => ({ ...prev, status: "idle" }));
-    };
-
-    ws.onclose = () => {
+    client.on("disconnected", () => {
       stopFrameCapture();
-    };
-  }, [addEntry, handleMessage, startFrameCapture, stopFrameCapture]);
+      setState((prev) =>
+        prev.status === "ended" ? prev : { ...prev, status: "idle" },
+      );
+    });
+
+    client.on("botStartedSpeaking", () => {
+      setState((prev) => ({ ...prev, status: "responding" }));
+    });
+
+    client.on("botStoppedSpeaking", () => {
+      setState((prev) => ({ ...prev, status: "listening" }));
+    });
+
+    client.on("userStartedSpeaking", () => {
+      setState((prev) => ({ ...prev, status: "thinking" }));
+    });
+
+    client.on("botTranscript", (data: { text: string }) => {
+      setState((prev) => ({ ...prev, currentInstruction: data.text }));
+      addEntry("system", data.text);
+    });
+
+    client.on("userTranscript", (data: { text: string; final: boolean }) => {
+      if (data.final) addEntry("user", data.text);
+    });
+
+    // Custom app messages from backend (state updates, step changes)
+    client.on("appMessage", (msg: Record<string, unknown>) => {
+      if (msg.type === "state_update") {
+        setState((prev) => ({
+          ...prev,
+          currentStep: (msg.current_step as string) ?? prev.currentStep,
+          stepNumber: (msg.step_number as number) ?? prev.stepNumber,
+          totalSteps: (msg.total_steps as number) ?? prev.totalSteps,
+          uncertain: (msg.uncertain as boolean) ?? prev.uncertain,
+        }));
+      }
+    });
+
+    client.on("error", (err: Error) => {
+      addEntry("system", `Error: ${err.message}`);
+    });
+
+    await client.connect();
+  }, [addEntry, startFrameCapture, stopFrameCapture]);
 
   const end = useCallback(() => {
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "end" }));
-      ws.close();
-    }
     stopFrameCapture();
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
+    clientRef.current?.disconnect();
+    clientRef.current = null;
+
+    // Stop camera stream
+    const video = videoRef.current;
+    if (video?.srcObject) {
+      (video.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
+      video.srcObject = null;
+    }
+
     setState({ ...INITIAL, status: "ended" });
     addEntry("system", "Session ended.");
   }, [addEntry, stopFrameCapture]);
 
   // ---------------------------------------------------------------------------
-  // User actions
+  // User actions — sent as app messages, backend workflow engine handles them
   // ---------------------------------------------------------------------------
 
-  const send = useCallback((msg: object) => {
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(msg));
-    }
-  }, []);
-
-  const sendTranscript = useCallback(
-    (text: string) => {
-      send({ type: "transcript", text });
-      addEntry("user", text);
+  const sendAction = useCallback(
+    (type: string, extra?: Record<string, unknown>) => {
+      clientRef.current?.sendMessage({ type, ...extra });
     },
-    [send, addEntry],
+    [],
   );
 
   const sendDone = useCallback(() => {
-    send({ type: "user.done" });
+    sendAction("user.done");
     addEntry("user", "Done.");
-  }, [send, addEntry]);
+  }, [sendAction, addEntry]);
 
   const sendRepeat = useCallback(() => {
-    send({ type: "user.repeat" });
+    sendAction("user.repeat");
     addEntry("user", "Please repeat.");
-  }, [send, addEntry]);
+  }, [sendAction, addEntry]);
 
-  // ---------------------------------------------------------------------------
+  const sendTranscript = useCallback(
+    (text: string) => {
+      sendAction("transcript", { text });
+      addEntry("user", text);
+    },
+    [sendAction, addEntry],
+  );
 
   return {
     ...state,
