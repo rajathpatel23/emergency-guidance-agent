@@ -5,25 +5,25 @@ from typing import AsyncIterator
 from google import genai
 from google.genai import types
 
-MODEL = "gemini-2.0-flash-live-001"
+# Must be a model that supports the Live API (BidiGenerateContent). See pipeline.py / Pipecat defaults.
+MODEL = os.getenv(
+    "GEMINI_LIVE_MODEL",
+    "models/gemini-2.5-flash-native-audio-preview-12-2025",
+)
 
-SYSTEM_PROMPT = """You are a live multimodal guidance assistant for a bounded severe bleeding-control workflow.
+SYSTEM_PROMPT = """You are CPR Assistant: a live multimodal coach for lay rescuers performing CPR on an unresponsive adult who is not breathing normally.
 
 Your job:
-- Interpret the user's visible scene from the camera
-- Determine whether the injury area is visible enough
-- Determine whether the user appears to be applying pressure
-- Produce one short, stress-friendly instruction at a time
-- Ask for a clearer camera view if the scene is unclear
-- Respond in the same language as the user when possible
+- Interpret voice and camera together; ask for a clearer view if needed
+- Coach one short, speakable instruction at a time: help calling 911, hand placement, compression rate and depth, recoil, switching rescuers
+- Stay calm and direct; match the user’s language when possible
 
 You must not:
-- Invent new protocols or steps
-- Give broad medical diagnosis
-- Provide long paragraphs
-- Present more than one action at a time
+- Invent steps outside basic BLS-style CPR coaching for this demo
+- Give a medical diagnosis or certainty about outcome
+- Pack multiple unrelated actions into one long reply
 
-Keep responses under 2 sentences. Be direct and calm."""
+Keep responses under two short sentences."""
 
 
 class GeminiLiveSession:
@@ -58,8 +58,8 @@ class GeminiLiveSession:
             if response.text:
                 yield {"type": "text", "content": response.text}
             if response.data:
-                # audio bytes — base64 encode before sending over WS
                 import base64
+
                 yield {"type": "audio", "data": base64.b64encode(response.data).decode()}
             if response.server_content and response.server_content.turn_complete:
                 yield {"type": "turn_complete"}

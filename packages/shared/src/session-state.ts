@@ -1,19 +1,19 @@
 /**
  * PRD §18 — Session state object (authoritative fields owned by the app).
  */
-export type ScenarioId = "bleeding_control";
+export type ScenarioId = "cpr_coaching";
 
 export type WorkflowStep =
   | "intake"
   | "escalation"
-  | "identify_injury"
-  | "apply_pressure"
-  | "maintain_pressure"
+  | "see_patient"
+  | "start_compressions"
+  | "continue_cpr"
   | "complete";
 
 export type ViewQuality = "unknown" | "clear" | "unclear";
 
-export type PressureSignal = "unknown" | "yes" | "no";
+export type CompressionSignal = "unknown" | "yes" | "no";
 
 export type SessionLifecycleStatus = "active" | "ended";
 
@@ -24,8 +24,8 @@ export interface SessionState {
   current_step: WorkflowStep;
   called_emergency: boolean;
   view_quality: ViewQuality;
-  injury_visible: boolean;
-  pressure_applied: PressureSignal;
+  patient_visible: boolean;
+  compressions_detected: CompressionSignal;
   last_instruction: string;
   step_attempts: number;
   status: SessionLifecycleStatus;
@@ -34,13 +34,13 @@ export interface SessionState {
 export function createInitialSessionState(sessionId: string): SessionState {
   return {
     session_id: sessionId,
-    scenario: "bleeding_control",
+    scenario: "cpr_coaching",
     language: "en",
     current_step: "intake",
     called_emergency: false,
     view_quality: "unknown",
-    injury_visible: false,
-    pressure_applied: "unknown",
+    patient_visible: false,
+    compressions_detected: "unknown",
     last_instruction: "",
     step_attempts: 0,
     status: "active",

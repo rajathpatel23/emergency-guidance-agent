@@ -84,7 +84,7 @@ class WorkflowProcessor(FrameProcessor):
             session.session_id,
             current_step=session.current_step,
             step_attempts=session.step_attempts,
-            injury_visible=interp.person_visible,
+            patient_visible=interp.person_visible,
             view_quality="unclear" if interp.view_unclear else "clear",
         )
 
@@ -104,11 +104,57 @@ class WorkflowProcessor(FrameProcessor):
 def _extract_interpretation(model_text: str, transcript: str = "") -> ModelInterpretation:
     combined = (model_text + " " + transcript).lower()
     return ModelInterpretation(
-        person_visible=any(w in combined for w in ["person", "patient", "body", "chest", "lying"]),
-        view_unclear=any(w in combined for w in ["cannot see", "can't see", "unclear", "move the camera", "closer", "better angle", "show me"]),
-        hands_positioned=any(w in combined for w in ["hands", "positioned", "center of the chest", "placed"]),
-        compressions_happening=any(w in combined for w in ["pressing", "compressions", "pushing", "pumping"]),
-        person_responsive=any(w in combined for w in ["responsive", "breathing", "moving", "conscious"]),
+        person_visible=any(
+            w in combined
+            for w in [
+                "person",
+                "patient",
+                "victim",
+                "body",
+                "chest",
+                "lying",
+                "on the floor",
+                "unresponsive",
+                "not breathing",
+            ]
+        ),
+        view_unclear=any(
+            w in combined
+            for w in [
+                "cannot see",
+                "can't see",
+                "unclear",
+                "move the camera",
+                "closer",
+                "better angle",
+                "show me",
+            ]
+        ),
+        hands_positioned=any(
+            w in combined
+            for w in [
+                "hands",
+                "heel",
+                "stacked",
+                "center of the chest",
+                "sternum",
+                "placed",
+                "interlocked",
+            ]
+        ),
+        compressions_happening=any(
+            w in combined
+            for w in [
+                "compressions",
+                "compressing",
+                "pushing",
+                "pumping",
+                "pressing",
+                "cpr",
+                "push hard",
+            ]
+        ),
+        person_responsive=any(w in combined for w in ["responsive", "breathing", "moving", "conscious", "coughing"]),
         transcript_summary=transcript,
     )
 
@@ -127,14 +173,25 @@ async def create_pipeline(
         params=FastAPIWebsocketParams(
             serializer=ProtobufFrameSerializer(),
             add_wav_header=False,
+            # TransportParams defaults audio_in/out to False — mic and TTS are dropped.
+            audio_in_enabled=True,
+            audio_in_sample_rate=16000,
+            audio_out_enabled=True,
+            audio_out_sample_rate=24000,
         ),
     )
 
+    # Use a Live-native-audio model + v1alpha — see Pipecat GeminiLiveLLMService defaults.
+    # Aliases like "gemini-2.0-flash-live-001" or "*-latest" often 404 or fail on BidiGenerateContent.
+    live_model = os.getenv(
+        "GEMINI_LIVE_MODEL",
+        "models/gemini-2.5-flash-native-audio-preview-12-2025",
+    )
     gemini = GeminiLiveLLMService(
         api_key=os.environ["GEMINI_API_KEY"],
         http_options=HttpOptions(api_version="v1alpha"),
         settings=GeminiLiveLLMService.Settings(
-            model="gemini-2.5-flash-native-audio-latest",
+            model=live_model,
             system_instruction=build_system_prompt(session.current_step),
             voice="Charon",
         ),

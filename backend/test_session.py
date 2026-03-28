@@ -1,5 +1,5 @@
 """
-Manual integration test — simulates a full bleeding control session
+Manual integration test — simulates a CPR coaching session
 without a browser. Run while uvicorn is up on port 8000.
 
 Usage:
@@ -11,7 +11,7 @@ import httpx
 import websockets
 
 BASE_HTTP = "http://localhost:8000"
-BASE_WS   = "ws://localhost:8000"
+BASE_WS = "ws://localhost:8000"
 
 
 async def run():
@@ -61,8 +61,8 @@ async def run():
         print(f"  <-- {msg['type']}: step={msg.get('current_step')}\n")
 
         # --- Step 1: intake — describe the situation
-        print("[test] describing injury...")
-        await send({"type": "transcript", "text": "He cut his arm badly, there is a lot of blood."})
+        print("[test] describing unresponsive patient...")
+        await send({"type": "transcript", "text": "He's not responding I don't think he's breathing."})
         await recv_until_instruction()
 
         # --- Step 2: user confirms escalation step
@@ -70,18 +70,18 @@ async def run():
         await send({"type": "user.done"})
         await recv_until_instruction()
 
-        # --- Step 3: simulate injury now visible
-        print("\n[test] sending transcript indicating injury is visible...")
-        await send({"type": "transcript", "text": "I can see the wound on his forearm, it is bleeding."})
+        # --- Step 3: patient visible / on back
+        print("\n[test] sending transcript — patient in view...")
+        await send({"type": "transcript", "text": "I can see him on the floor on his back, chest is in the frame."})
         await recv_until_instruction()
 
-        # --- Step 4: user applies pressure
-        print("\n[test] user confirms pressure applied...")
-        await send({"type": "transcript", "text": "I am pressing firmly on the wound now."})
+        # --- Step 4: compressions
+        print("\n[test] user starting compressions...")
+        await send({"type": "transcript", "text": "I'm pushing on the center of his chest doing compressions now."})
         await recv_until_instruction()
 
-        # --- Step 5: user confirms maintaining pressure
-        print("\n[test] user confirms maintaining pressure...")
+        # --- Step 5: user confirms continuing
+        print("\n[test] user confirms continuing CPR...")
         await send({"type": "user.done"})
         await recv_until_instruction()
 
