@@ -104,7 +104,7 @@ def evaluate(
 
     # --- Per-step model signal checks ---
     if step == "intake":
-        has_context = bool(interpretation.transcript_summary) or interpretation.injury_visible
+        has_context = bool(interpretation.transcript_summary) or interpretation.person_visible
         if has_context:
             return WorkflowDecision(kind="advance", next_step="escalation", reason="initial context captured")
         return WorkflowDecision(kind="stay", next_step="intake", reason="waiting for context")
@@ -116,12 +116,12 @@ def evaluate(
         return WorkflowDecision(kind="repeat", next_step="escalation", reason="delivering escalation")
 
     if step == "identify_injury":
-        if interpretation.injury_visible:
+        if interpretation.person_visible:
             return WorkflowDecision(kind="advance", next_step="apply_pressure", reason="injury visible")
         return WorkflowDecision(kind="repeat", next_step="identify_injury", reason="injury not yet visible")
 
     if step == "apply_pressure":
-        if interpretation.pressure_applied:
+        if interpretation.compressions_happening or interpretation.hands_positioned:
             return WorkflowDecision(kind="advance", next_step="maintain_pressure", reason="pressure applied")
         return WorkflowDecision(kind="repeat", next_step="apply_pressure", reason="pressure not yet applied")
 
