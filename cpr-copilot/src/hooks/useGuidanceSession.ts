@@ -194,7 +194,8 @@ export function useGuidanceSession() {
     });
 
     client.on("error", (err: RTVIMessage) => {
-      addEntry("system", `Error: ${String(err)}`);
+      const msg = err?.data ? JSON.stringify(err.data) : (err?.type ?? "unknown error");
+      addEntry("system", `Error: ${msg}`);
     });
 
     await client.connect();
