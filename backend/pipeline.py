@@ -51,7 +51,7 @@ class WorkflowProcessor(FrameProcessor):
             self._buffer.append(frame.text)
 
         elif isinstance(frame, TranscriptionFrame):
-            # User speech transcript — extract interpretation signals
+            logger.debug(f"[gemini] user: '{frame.text}'")
             interp = _extract_interpretation("", frame.text)
             interp.transcript_summary = frame.text
             await self._run_engine(interp)
@@ -60,6 +60,7 @@ class WorkflowProcessor(FrameProcessor):
             full_text = "".join(self._buffer).strip()
             self._buffer.clear()
             if full_text:
+                logger.debug(f"[gemini] bot: '{full_text[:120]}'")
                 interp = _extract_interpretation(full_text)
                 await self._run_engine(interp)
 

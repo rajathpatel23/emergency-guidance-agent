@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
+from loguru import logger
 from models import ModelInterpretation, SessionState, WorkflowStep
 
 # ---------------------------------------------------------------------------
@@ -134,12 +135,19 @@ def evaluate(
 
 def apply_decision(session: SessionState, decision: WorkflowDecision) -> SessionState:
     """Apply a WorkflowDecision to session state and return the updated state."""
+    prev = session.current_step
     if decision.kind == "advance":
         session.current_step = decision.next_step
         session.step_attempts = 0
-    elif decision.kind in ("repeat", "clarify"):
+        logger.info(f"[workflow] ADVANCE  {prev} → {session.current_step}  reason=\'{decision.reason}\'")
+    elif decision.kind == "clarify":
         session.step_attempts += 1
-    # "stay" leaves state unchanged
+        logger.debug(f"[workflow] CLARIFY  step={prev}  attempts={session.step_attempts}")
+    elif decision.kind == "repeat":
+        session.step_attempts += 1
+        logger.debug(f"[workflow] REPEAT   step={prev}  attempts={session.step_attempts}")
+    else:
+        logger.debug(f"[workflow] STAY     step={prev}")
     return session
 
 
