@@ -1,27 +1,43 @@
 const STEP_LABELS: Record<string, { label: string; color: string }> = {
-  idle: { label: "STANDBY", color: "bg-muted text-muted-foreground" },
-  intake: { label: "ASSESS", color: "bg-warning/15 text-warning border border-warning/30" },
-  escalation: { label: "CALL 911", color: "bg-emergency/15 text-emergency border border-emergency/30 pulse-emergency" },
-  identify_injury: { label: "POSITION", color: "bg-warning/15 text-warning border border-warning/30" },
-  apply_pressure: { label: "COMPRESSIONS", color: "bg-emergency/15 text-emergency border border-emergency/30" },
-  maintain_pressure: { label: "CONTINUE CPR", color: "bg-emergency/15 text-emergency border border-emergency/30 pulse-emergency" },
-  complete: { label: "COMPLETE", color: "bg-success/15 text-success border border-success/30" },
+  idle:                 { label: "STANDBY",      color: "bg-muted text-muted-foreground" },
+  intake:               { label: "ASSESS",        color: "bg-warning/15 text-warning border border-warning/30" },
+  check_responsiveness: { label: "RESPONSIVE?",   color: "bg-warning/15 text-warning border border-warning/30" },
+  call_emergency:       { label: "CALL 911",      color: "bg-emergency/15 text-emergency border border-emergency/30 pulse-emergency" },
+  position_hands:       { label: "POSITION",      color: "bg-warning/15 text-warning border border-warning/30" },
+  start_compressions:   { label: "COMPRESSIONS",  color: "bg-emergency/15 text-emergency border border-emergency/30" },
+  keep_rhythm:          { label: "KEEP RHYTHM",   color: "bg-emergency/15 text-emergency border border-emergency/30 pulse-emergency" },
+  continue_loop:        { label: "CONTINUE CPR",  color: "bg-emergency/15 text-emergency border border-emergency/30 pulse-emergency" },
+  complete:             { label: "COMPLETE",      color: "bg-success/15 text-success border border-success/30" },
 };
 
-const STEPS_ORDER = ["intake", "escalation", "identify_injury", "apply_pressure", "maintain_pressure", "complete"];
+const STEPS_ORDER = [
+  "intake",
+  "check_responsiveness",
+  "call_emergency",
+  "position_hands",
+  "start_compressions",
+  "keep_rhythm",
+  "continue_loop",
+  "complete",
+];
 
 interface StepBadgeProps {
   currentStep: string;
+  stepNumber?: number;
+  totalSteps?: number;
 }
 
-const StepBadge = ({ currentStep }: StepBadgeProps) => {
-  const info = STEP_LABELS[currentStep] || STEP_LABELS.idle;
+const StepBadge = ({ currentStep, stepNumber, totalSteps }: StepBadgeProps) => {
+  const info = STEP_LABELS[currentStep] ?? STEP_LABELS.idle;
   const currentIndex = STEPS_ORDER.indexOf(currentStep);
 
   return (
     <div className="flex items-center gap-3">
       <span className={`inline-flex items-center px-3 py-1.5 rounded-md text-xs font-mono font-bold tracking-wider ${info.color}`}>
         {info.label}
+        {stepNumber != null && totalSteps != null && currentStep !== "idle" && (
+          <span className="ml-1.5 opacity-60">{stepNumber}/{totalSteps}</span>
+        )}
       </span>
       {currentStep !== "idle" && (
         <div className="flex items-center gap-1">
