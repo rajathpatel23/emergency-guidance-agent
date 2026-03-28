@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback } from "react";
-import { PipecatClient } from "@pipecat-ai/client-js";
+import { PipecatClient, RTVIMessage } from "@pipecat-ai/client-js";
+import { WebSocketTransport, ProtobufFrameSerializer } from "@pipecat-ai/websocket-transport";
 import { type TranscriptEntry } from "@/components/TranscriptPanel";
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "http://localhost:8000") as string;
@@ -30,7 +31,7 @@ const INITIAL: SessionState = {
   status: "idle",
   currentStep: "idle",
   stepNumber: 0,
-  totalSteps: 6,
+  totalSteps: 8,
   currentInstruction: "Press Start CPR Mode to begin.",
   uncertain: false,
   language: "en",
@@ -39,6 +40,7 @@ const INITIAL: SessionState = {
 
 export function useGuidanceSession() {
   const clientRef = useRef<PipecatClient | null>(null);
+  const transportRef = useRef<WebSocketTransport | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameIntervalRef = useRef<number | null>(null);
@@ -56,10 +58,10 @@ export function useGuidanceSession() {
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Video frame capture — sends JPEG frames via Pipecat client messages
+  // Video frame capture — sends JPEG frames as raw WebSocket messages
   // ---------------------------------------------------------------------------
 
-  const startFrameCapture = useCallback((client: PipecatClient) => {
+  const startFrameCapture = useCallback((transport: WebSocketTransport) => {
     if (!canvasRef.current) {
       const c = document.createElement("canvas");
       c.width = 640;
@@ -81,8 +83,7 @@ export function useGuidanceSession() {
             let binary = "";
             bytes.forEach((b) => (binary += String.fromCharCode(b)));
             const b64 = btoa(binary);
-            // Send as a custom app message alongside the audio pipeline
-            client.sendMessage({ type: "frame", data: b64 });
+            transport.sendRawMessage({ type: "frame", data: b64 });
           });
         },
         "image/jpeg",
@@ -132,21 +133,23 @@ export function useGuidanceSession() {
       return;
     }
 
-    // 3. Connect Pipecat client (handles mic capture + audio pipeline)
-    const client = new PipecatClient({
-      transport: {
-        url: `${WS_BASE}/ws/stream/${sessionId}`,
-        enableMic: true,
-        enableCam: false, // we handle video frames manually
-      } as any,
+    // 3. Build Pipecat WebSocket transport with protobuf serialization
+    const transport = new WebSocketTransport({
+      wsUrl: `${WS_BASE}/ws/stream/${sessionId}`,
+      serializer: new ProtobufFrameSerializer(),
     });
+    transportRef.current = transport;
 
+    const client = new PipecatClient({
+      transport,
+      enableMic: true,
+    });
     clientRef.current = client;
 
     client.on("connected", () => {
       setState((prev) => ({ ...prev, sessionId, status: "listening" }));
       addEntry("system", "Session started. I am watching and listening.");
-      startFrameCapture(client);
+      startFrameCapture(transport);
     });
 
     client.on("disconnected", () => {
@@ -177,8 +180,8 @@ export function useGuidanceSession() {
       if (data.final) addEntry("user", data.text);
     });
 
-    // Custom app messages from backend (state updates, step changes)
-    client.on("appMessage", (msg: Record<string, unknown>) => {
+    // State updates pushed from backend workflow engine
+    client.on("serverMessage", (msg: Record<string, unknown>) => {
       if (msg.type === "state_update") {
         setState((prev) => ({
           ...prev,
@@ -190,8 +193,8 @@ export function useGuidanceSession() {
       }
     });
 
-    client.on("error", (err: Error) => {
-      addEntry("system", `Error: ${err.message}`);
+    client.on("error", (err: RTVIMessage) => {
+      addEntry("system", `Error: ${String(err)}`);
     });
 
     await client.connect();
@@ -201,6 +204,7 @@ export function useGuidanceSession() {
     stopFrameCapture();
     clientRef.current?.disconnect();
     clientRef.current = null;
+    transportRef.current = null;
 
     // Stop camera stream
     const video = videoRef.current;
@@ -214,12 +218,12 @@ export function useGuidanceSession() {
   }, [addEntry, stopFrameCapture]);
 
   // ---------------------------------------------------------------------------
-  // User actions — sent as app messages, backend workflow engine handles them
+  // User actions — sent as RTVIMessages, backend workflow engine handles them
   // ---------------------------------------------------------------------------
 
   const sendAction = useCallback(
     (type: string, extra?: Record<string, unknown>) => {
-      clientRef.current?.sendMessage({ type, ...extra });
+      clientRef.current?.sendMessage(new RTVIMessage(type, extra ?? {}));
     },
     [],
   );
