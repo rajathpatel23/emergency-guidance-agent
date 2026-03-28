@@ -66,12 +66,12 @@ class GeminiLiveSession:
 
 
 @asynccontextmanager
-async def open_gemini_session() -> AsyncIterator[GeminiLiveSession]:
+async def open_gemini_session(system_prompt: str = SYSTEM_PROMPT) -> AsyncIterator[GeminiLiveSession]:
     """Open a Gemini Live session for the duration of a WebSocket connection."""
     client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     config = types.LiveConnectConfig(
         response_modalities=["TEXT"],  # add "AUDIO" when ready for voice output
-        system_instruction=SYSTEM_PROMPT,
+        system_instruction=system_prompt,
     )
     async with client.aio.live.connect(model=MODEL, config=config) as session:
         yield GeminiLiveSession(session)

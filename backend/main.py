@@ -1,93 +1,58 @@
-import asyncio
-import base64
-import json
 import os
-
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
 
-from gemini_session import open_gemini_session
+from log_config import setup_logging
+from pipeline import create_pipeline
+from session_manager import create_session, get_session, end_session, all_sessions
 
 load_dotenv()
+setup_logging(level=os.getenv("LOG_LEVEL", "DEBUG"))
 
-app = FastAPI(title="Emergency Guidance Agent API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # tighten for production
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+app = FastAPI(title="CPR Copilot API")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
+@app.post("/session")
+async def new_session():
+    session = create_session()
+    return session.to_dict()
 
-@app.websocket("/ws/stream")
-async def stream(websocket: WebSocket):
-    """
-    Single WebSocket endpoint for a live guidance session.
+@app.get("/session/{session_id}")
+async def fetch_session(session_id: str):
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session.to_dict()
 
-    Client → server message shapes:
-      {"type": "frame",   "data": "<base64 JPEG>"}
-      {"type": "audio",   "data": "<base64 PCM 16kHz mono s16le>"}
-      {"type": "transcript", "text": "user speech as text"}
-      {"type": "end"}
+@app.get("/debug/sessions")
+async def debug_sessions():
+    """Live view of all in-memory sessions."""
+    sessions = all_sessions()
+    return {"count": len(sessions), "sessions": sessions}
 
-    Server → client message shapes:
-      {"type": "text",         "content": "..."}
-      {"type": "audio",        "data": "<base64 PCM>"}
-      {"type": "turn_complete"}
-      {"type": "status",       "status": "connected"}
-      {"type": "error",        "message": "..."}
-    """
+@app.websocket("/ws/stream/{session_id}")
+async def stream(websocket: WebSocket, session_id: str):
+    session = get_session(session_id)
+    if not session:
+        logger.warning(f"[ws] rejected — session {session_id[:8]} not found")
+        await websocket.close(code=4004, reason="Session not found")
+        return
+
     await websocket.accept()
+    logger.info(f"[ws] connected  session={session_id[:8]}  step={session.current_step}")
 
     try:
-        async with open_gemini_session() as session:
-            await websocket.send_json({"type": "status", "status": "connected"})
-
-            async def receive_from_client():
-                """Read frames/audio from the browser and forward to Gemini."""
-                try:
-                    while True:
-                        raw = await websocket.receive_text()
-                        msg = json.loads(raw)
-
-                        match msg.get("type"):
-                            case "frame":
-                                frame_bytes = base64.b64decode(msg["data"])
-                                await session.send_frame(frame_bytes)
-                            case "audio":
-                                audio_bytes = base64.b64decode(msg["data"])
-                                await session.send_audio(audio_bytes)
-                            case "transcript":
-                                await session.send_text(msg.get("text", ""))
-                            case "end":
-                                return
-                except WebSocketDisconnect:
-                    pass
-
-            async def receive_from_gemini():
-                """Stream Gemini responses back to the browser."""
-                async for response in session.responses():
-                    try:
-                        await websocket.send_json(response)
-                    except WebSocketDisconnect:
-                        return
-
-            await asyncio.gather(receive_from_client(), receive_from_gemini())
-
-    except Exception as exc:
-        try:
-            await websocket.send_json({"type": "error", "message": str(exc)})
-        except Exception:
-            pass
+        runner, task = await create_pipeline(websocket, session)
+        await runner.run(task)
+    except Exception:
+        import traceback
+        traceback.print_exc()
     finally:
-        try:
-            await websocket.close()
-        except Exception:
-            pass
+        logger.info(f"[ws] closed     session={session_id[:8]}  final_step={session.current_step}")
+        end_session(session_id)

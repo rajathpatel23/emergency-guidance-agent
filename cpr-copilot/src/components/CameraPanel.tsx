@@ -1,47 +1,17 @@
 import { Camera, CameraOff } from "lucide-react";
-import { useRef, useEffect, useState } from "react";
+import { type RefObject } from "react";
 
 interface CameraPanelProps {
   isActive: boolean;
+  /** Video ref owned by useGuidanceSession — stream managed by the hook */
+  videoRef: RefObject<HTMLVideoElement>;
+  error?: string | null;
 }
 
-const CameraPanel = ({ isActive }: CameraPanelProps) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [hasPermission, setHasPermission] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isActive) return;
-
-    let stream: MediaStream | null = null;
-
-    const startCamera = async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 640, height: 480, facingMode: "environment" },
-          audio: false,
-        });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-        setHasPermission(true);
-        setError(null);
-      } catch {
-        setError("Camera access denied");
-        setHasPermission(false);
-      }
-    };
-
-    startCamera();
-
-    return () => {
-      stream?.getTracks().forEach((t) => t.stop());
-    };
-  }, [isActive]);
-
+const CameraPanel = ({ isActive, videoRef, error }: CameraPanelProps) => {
   return (
     <div className="relative flex-1 min-h-0 rounded-xl overflow-hidden border border-border bg-card">
-      {isActive && hasPermission ? (
+      {isActive ? (
         <>
           <video
             ref={videoRef}
