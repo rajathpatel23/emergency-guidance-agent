@@ -40,7 +40,7 @@ const CameraPanel = ({ isActive }: CameraPanelProps) => {
   }, [isActive]);
 
   return (
-    <div className="relative flex-1 min-h-0 rounded-xl overflow-hidden border border-border bg-card">
+    <div className="relative flex-1 min-h-[200px] md:min-h-0 rounded-xl overflow-hidden border border-border bg-card">
       {isActive && hasPermission ? (
         <>
           <video

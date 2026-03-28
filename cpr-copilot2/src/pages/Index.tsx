@@ -70,16 +70,16 @@ const Index = () => {
       <DisclaimerBanner />
 
       {/* Header */}
-      <header className="flex items-center justify-between px-5 py-3 border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-emergency/15 flex items-center justify-center">
-            <Heart className="w-5 h-5 text-emergency" />
+      <header className="flex items-center justify-between px-3 md:px-5 py-2.5 md:py-3 border-b border-border">
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-emergency/15 flex items-center justify-center">
+            <Heart className="w-4 h-4 md:w-5 md:h-5 text-emergency" />
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-foreground">
+            <h1 className="text-base md:text-lg font-bold tracking-tight text-foreground">
               CPR Copilot
             </h1>
-            <p className="text-[11px] font-mono text-muted-foreground -mt-0.5">
+            <p className="text-[10px] md:text-[11px] font-mono text-muted-foreground -mt-0.5">
               Emergency Guidance Agent
             </p>
           </div>
@@ -88,21 +88,21 @@ const Index = () => {
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 flex min-h-0 p-4 gap-4">
-        {/* Left — Camera + Transcript */}
-        <div className="flex flex-col flex-1 gap-4 min-w-0">
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0 p-3 md:p-4 gap-3 md:gap-4 overflow-y-auto">
+        {/* Instructions — shown first on mobile for immediate guidance */}
+        <div className="lg:order-2 lg:w-[380px] flex-shrink-0">
+          <InstructionPanel currentStep={currentStep} />
+        </div>
+
+        {/* Camera + Transcript */}
+        <div className="flex flex-col flex-1 gap-3 md:gap-4 min-w-0 lg:order-1">
           <CameraPanel isActive={sessionActive} />
           <TranscriptPanel entries={transcript} />
         </div>
-
-        {/* Right — Instructions */}
-        <div className="w-[380px] flex-shrink-0">
-          <InstructionPanel currentStep={currentStep} />
-        </div>
       </div>
 
-      {/* Bottom Controls */}
-      <div className="px-4 pb-4">
+      {/* Bottom Controls — sticky on mobile */}
+      <div className="sticky bottom-0 px-3 pb-3 md:px-4 md:pb-4 bg-background/95 backdrop-blur-sm border-t border-border lg:border-t-0">
         <ActionBar
           sessionActive={sessionActive}
           currentStep={currentStep}

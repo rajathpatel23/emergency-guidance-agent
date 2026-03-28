@@ -46,7 +46,7 @@ const InstructionPanel = ({ currentStep }: InstructionPanelProps) => {
   const info = STEP_INSTRUCTIONS[currentStep] || STEP_INSTRUCTIONS.idle;
 
   return (
-    <div className="flex flex-col gap-4 p-5 rounded-xl border border-border bg-card h-full">
+    <div className="flex flex-col gap-3 md:gap-4 p-4 md:p-5 rounded-xl border border-border bg-card h-full">
       <div className="flex items-center gap-2">
         <AlertTriangle className="w-5 h-5 text-emergency" />
         <h2 className="text-sm font-mono font-semibold uppercase tracking-wider text-emergency">
@@ -54,8 +54,8 @@ const InstructionPanel = ({ currentStep }: InstructionPanelProps) => {
         </h2>
       </div>
 
-      <div className="flex-1 flex flex-col justify-center gap-4">
-        <p className="text-2xl font-bold leading-tight text-foreground">
+      <div className="flex-1 flex flex-col justify-center gap-3 md:gap-4">
+        <p className="text-xl md:text-2xl font-bold leading-tight text-foreground">
           {info.instruction}
         </p>
         <p className="text-sm leading-relaxed text-muted-foreground">
