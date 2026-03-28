@@ -28,12 +28,8 @@ const Index = () => {
             <Heart className="w-5 h-5 text-emergency" />
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-foreground">
-              CPR Copilot
-            </h1>
-            <p className="text-[11px] font-mono text-muted-foreground -mt-0.5">
-              Emergency Guidance Agent
-            </p>
+            <h1 className="text-lg font-bold tracking-tight text-foreground">CPR Copilot</h1>
+            <p className="text-[11px] font-mono text-muted-foreground -mt-0.5">Emergency Guidance Agent</p>
           </div>
         </div>
         <StepBadge
@@ -45,10 +41,7 @@ const Index = () => {
 
       <div className="flex-1 flex min-h-0 p-4 gap-4">
         <div className="flex flex-col flex-1 gap-4 min-w-0">
-          <CameraPanel
-            isActive={session.sessionActive}
-            videoRef={session.videoRef}
-          />
+          <CameraPanel isActive={session.sessionActive} videoRef={session.videoRef} />
           <TranscriptPanel entries={session.transcript} />
         </div>
 

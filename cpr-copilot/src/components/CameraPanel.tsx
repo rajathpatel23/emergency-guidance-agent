@@ -34,7 +34,7 @@ const CameraPanel = ({ isActive, videoRef, error }: CameraPanelProps) => {
             <Camera className="w-10 h-10 text-muted-foreground" />
           )}
           <p className="text-sm text-muted-foreground font-mono">
-            {error || "Camera and microphone will activate when session starts"}
+            {error || "Camera will activate when session starts"}
           </p>
         </div>
       )}

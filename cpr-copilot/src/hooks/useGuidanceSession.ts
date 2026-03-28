@@ -30,7 +30,7 @@ const INITIAL: SessionState = {
   status: "idle",
   currentStep: "idle",
   stepNumber: 0,
-  totalSteps: 8,
+  totalSteps: 6,
   currentInstruction: "Press Start CPR Mode to begin.",
   uncertain: false,
   language: "en",
