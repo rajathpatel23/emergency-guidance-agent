@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from log_config import setup_logging
-from pipeline import create_pipeline
+from pipeline import handle_session
 from session_manager import create_session, get_session, end_session, all_sessions
 
 load_dotenv()
@@ -14,14 +14,17 @@ setup_logging(level=os.getenv("LOG_LEVEL", "DEBUG"))
 app = FastAPI(title="CPR Copilot API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
 
 @app.post("/session")
 async def new_session():
     session = create_session()
     return session.to_dict()
+
 
 @app.get("/session/{session_id}")
 async def fetch_session(session_id: str):
@@ -30,11 +33,13 @@ async def fetch_session(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
     return session.to_dict()
 
+
 @app.get("/debug/sessions")
 async def debug_sessions():
     """Live view of all in-memory sessions."""
     sessions = all_sessions()
     return {"count": len(sessions), "sessions": sessions}
+
 
 @app.websocket("/ws/stream/{session_id}")
 async def stream(websocket: WebSocket, session_id: str):
@@ -48,8 +53,7 @@ async def stream(websocket: WebSocket, session_id: str):
     logger.info(f"[ws] connected  session={session_id[:8]}  step={session.current_step}")
 
     try:
-        runner, task = await create_pipeline(websocket, session)
-        await runner.run(task)
+        await handle_session(websocket, session)
     except Exception:
         import traceback
         traceback.print_exc()

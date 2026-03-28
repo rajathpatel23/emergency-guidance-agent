@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 WorkflowStep = Literal[
@@ -20,7 +20,7 @@ SessionStatus = Literal["active", "ended"]
 @dataclass
 class SessionState:
     session_id: str
-    scenario: str = "bleeding_control"
+    scenario: str = "cpr"
     language: str = "en"
     current_step: WorkflowStep = "intake"
     called_emergency: bool = False
@@ -49,11 +49,15 @@ class SessionState:
 
 @dataclass
 class ModelInterpretation:
-    person_visible: bool = False       # patient visible in frame
-    view_unclear: bool = False         # camera angle insufficient
-    hands_positioned: bool = False     # hands on center of chest
-    compressions_happening: bool = False  # user appears to be compressing
-    person_responsive: bool = False    # patient shows signs of response
+    """
+    Derived from audio/transcript alone — no video frames required.
+    The LLM infers CPR state from what the user says.
+    """
+    person_visible: bool = False          # user confirmed someone is present
+    view_unclear: bool = False            # user seems confused or uncertain
+    hands_positioned: bool = False        # user said hands are on center of chest
+    compressions_happening: bool = False  # user said they are compressing
+    person_responsive: bool = False       # user mentioned patient is responsive/breathing
     suggested_instruction: str = ""
     language_detected: str = "en"
     transcript_summary: str = ""

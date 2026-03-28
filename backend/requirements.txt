@@ -3,6 +3,5 @@ uvicorn[standard]>=0.29.0
 websockets>=12.0
 python-dotenv>=1.0.0
 httpx>=0.27.0
-
-# Pipecat — real-time voice/video AI pipeline (requires Python 3.10+)
-pipecat-ai[google,silero]>=0.0.108
+anthropic>=0.25.0
+loguru>=0.7.0
