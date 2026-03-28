@@ -1,17 +1,16 @@
-import asyncio
 import os
 from loguru import logger
 
 from pipecat.frames.frames import (
     Frame,
     LLMFullResponseEndFrame,
-    StartFrame,
     TextFrame,
     TranscriptionFrame,
 )
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
+from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 from pipecat.serializers.protobuf import ProtobufFrameSerializer
 from google.genai.types import HttpOptions
@@ -24,19 +23,17 @@ from pipecat.transports.websocket.fastapi import (
 from models import ModelInterpretation, SessionState
 from prompts import build_system_prompt, step_context_message
 from session_manager import update_session
-from workflow_engine import apply_decision, current_config, evaluate, step_number, TOTAL_STEPS
+from workflow_engine import apply_decision, evaluate, TOTAL_STEPS
 
 
 # ---------------------------------------------------------------------------
 # Workflow frame processor
-# Sits after Gemini in the pipeline, intercepts text output, runs FSM
 # ---------------------------------------------------------------------------
 
 class WorkflowProcessor(FrameProcessor):
     """
-    Intercepts completed Gemini text turns, runs the workflow engine,
-    updates session state, and injects step-context turns when the step
-    advances so Gemini stays aligned.
+    Intercepts completed Gemini turns, runs the workflow FSM, and injects
+    step-context messages when the step advances.
     """
 
     def __init__(self, session: SessionState, gemini_service: GeminiLiveLLMService):
@@ -48,15 +45,7 @@ class WorkflowProcessor(FrameProcessor):
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
 
-        if isinstance(frame, StartFrame):
-            # Give Gemini ~1s to establish the bidi connection, then kick off
-            # the conversation with the first step's instruction.
-            asyncio.get_event_loop().call_later(
-                1.0,
-                lambda: asyncio.ensure_future(self._send_greeting()),
-            )
-
-        elif isinstance(frame, TextFrame):
+        if isinstance(frame, TextFrame):
             self._buffer.append(frame.text)
 
         elif isinstance(frame, TranscriptionFrame):
@@ -74,13 +63,6 @@ class WorkflowProcessor(FrameProcessor):
                 await self._run_engine(interp)
 
         await self.push_frame(frame, direction)
-
-    async def _send_greeting(self):
-        """Push the opening instruction to Gemini to start the conversation."""
-        from prompts import step_context_message
-        opening = step_context_message(self._session.current_step)
-        logger.info("[workflow] sending opening trigger to Gemini")
-        await self._gemini.push_frame(TextFrame(opening))
 
     async def _run_engine(self, interp: ModelInterpretation):
         session = self._session
@@ -102,13 +84,12 @@ class WorkflowProcessor(FrameProcessor):
                 f"[workflow] {prev_step} → {session.current_step} "
                 f"(reason: {decision.reason})"
             )
-            # Inject step context so Gemini knows the new objective
             context_msg = step_context_message(session.current_step)
             await self._gemini.push_frame(TextFrame(context_msg))
 
 
 # ---------------------------------------------------------------------------
-# Heuristic interpretation (same as before, kept here to avoid circular import)
+# Heuristic interpretation
 # ---------------------------------------------------------------------------
 
 def _extract_interpretation(model_text: str, transcript: str = "") -> ModelInterpretation:
@@ -131,10 +112,6 @@ async def create_pipeline(
     websocket,
     session: SessionState,
 ) -> tuple[PipelineRunner, PipelineTask]:
-    """
-    Build and return a Pipecat pipeline for one WebSocket session.
-    Call runner.run(task) to start it.
-    """
 
     transport = FastAPIWebsocketTransport(
         websocket=websocket,
@@ -147,11 +124,6 @@ async def create_pipeline(
     gemini = GeminiLiveLLMService(
         api_key=os.environ["GEMINI_API_KEY"],
         http_options=HttpOptions(api_version="v1alpha"),
-        # inference_on_context_initialization=True (default) sends an empty
-        # send_client_content(turns=[], turn_complete=True) which crashes
-        # gemini-2.5 with error 1007. Disable it; we trigger the first turn
-        # manually via WorkflowProcessor._send_greeting() after connection.
-        inference_on_context_initialization=False,
         settings=GeminiLiveLLMService.Settings(
             model="gemini-2.5-flash-native-audio-latest",
             system_instruction=build_system_prompt(session.current_step),
@@ -159,10 +131,16 @@ async def create_pipeline(
         ),
     )
 
+    # Seed the context with a minimal user message so _create_initial_response()
+    # sends a real turn_complete to Gemini when the session connects, causing it
+    # to speak the opening line immediately without waiting for user input.
+    seed_context = OpenAILLMContext(
+        messages=[{"role": "user", "content": "begin"}]
+    )
+    await gemini.set_context(seed_context)
+
     workflow = WorkflowProcessor(session=session, gemini_service=gemini)
 
-    # Gemini Live manages its own conversation context via the bidi stream;
-    # no context aggregator is needed.
     pipeline = Pipeline(
         [
             transport.input(),   # audio from browser
