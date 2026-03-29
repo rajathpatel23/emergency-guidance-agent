@@ -53,7 +53,7 @@ emergency-guidance-agent/
 ├── cpr-copilot/              # React + Pipecat client (browser UI)
 ├── apps/api/                 # Fastify + WebSocket (optional TS stack / stubs)
 ├── packages/shared/          # Shared TS types (session, workflow, events)
-├── docs/                     # PRD, implementation notes
+├── docs/                     # PRD, API notes, static HTML
 └── package.json              # Monorepo workspaces (Node apps + shared)
 ```
 
@@ -91,7 +91,6 @@ npm run dev:api
 ## Docs
 
 - [PRD](docs/PRD.md) — requirements and guardrails (may predate CPR-specific naming)
-- [Implementation](docs/IMPLEMENTATION.md) — deeper technical notes
 - [API](docs/API.md) — HTTP/WebSocket shape
 - Optional HTML (open locally): [architecture diagram](docs/architecture.html), [showcase landing](docs/system-showcase.html), [presentation slide](docs/presentation.html)
 
