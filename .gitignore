@@ -10,3 +10,6 @@ backend/.venv/
 **/__pycache__/
 *.pyc
 .env.*
+
+# Gemini test harness output (see backend/test_gemini.py)
+backend/output.wav
