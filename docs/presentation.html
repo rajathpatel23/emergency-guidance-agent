@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emergency Guidance Agent</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0a0e1a;
+      color: #f0f4ff;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .slide {
+      width: 1200px;
+      max-width: 96vw;
+      padding: 52px 64px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 36px;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .badge {
+      background: #e53e3e;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      display: inline-block;
+    }
+
+    h1 {
+      font-size: 52px;
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+    }
+
+    h1 span {
+      color: #fc8181;
+    }
+
+    .tagline {
+      font-size: 18px;
+      color: #90a4c8;
+      max-width: 520px;
+      line-height: 1.5;
+      margin-top: 10px;
+    }
+
+    .principle {
+      text-align: right;
+      background: rgba(252, 129, 129, 0.08);
+      border: 1px solid rgba(252, 129, 129, 0.2);
+      border-radius: 10px;
+      padding: 18px 22px;
+      max-width: 280px;
+      flex-shrink: 0;
+    }
+
+    .principle p {
+      font-size: 13px;
+      color: #90a4c8;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+    }
+
+    .principle strong {
+      font-size: 16px;
+      line-height: 1.4;
+      color: #fc8181;
+    }
+
+    /* ── Flow ── */
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+
+    .step {
+      flex: 1;
+      text-align: center;
+      padding: 14px 8px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      position: relative;
+    }
+
+    .step .num {
+      font-size: 11px;
+      font-weight: 700;
+      color: #fc8181;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .step .label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    .arrow {
+      color: #3a4a6a;
+      font-size: 18px;
+      padding: 0 6px;
+      flex-shrink: 0;
+    }
+
+    /* ── Main body ── */
+    .body {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+    }
+
+    .card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .card.highlight {
+      border-color: rgba(252, 129, 129, 0.3);
+      background: rgba(252, 129, 129, 0.05);
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #90a4c8;
+      margin-bottom: 14px;
+    }
+
+    .card-title.red { color: #fc8181; }
+
+    .arch-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .arch-row:last-child { margin-bottom: 0; }
+
+    .arch-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .arch-text {
+      font-size: 14px;
+      color: #cbd5e0;
+      line-height: 1.4;
+    }
+
+    .arch-text strong { color: #f0f4ff; font-weight: 600; }
+
+    /* Tools */
+    .tool {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .tool:last-child { margin-bottom: 0; }
+
+    .tool-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .tool-info strong {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+
+    .tool-info span {
+      font-size: 12px;
+      color: #90a4c8;
+      line-height: 1.4;
+    }
+
+    /* Footer */
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid rgba(255,255,255,0.07);
+      padding-top: 18px;
+    }
+
+    .footer-note {
+      font-size: 12px;
+      color: #4a5a7a;
+    }
+
+    .footer-built {
+      font-size: 12px;
+      color: #4a5a7a;
+    }
+
+    .footer-built span {
+      color: #90a4c8;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+<div class="slide">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <div class="badge">Demo &middot; Research Prototype</div>
+      <h1>Emergency<br/><span>Guidance Agent</span></h1>
+      <p class="tagline">Live voice-and-video CPR coaching for bystanders — built in hours, not months.</p>
+    </div>
+    <div class="principle">
+      <p>Core principle</p>
+      <strong>"Gemini interprets.<br/>The application decides."</strong>
+    </div>
+  </div>
+
+  <!-- Workflow flow -->
+  <div class="flow">
+    <div class="step"><div class="num">01</div><div class="label">Intake</div></div>
+    <div class="arrow">›</div>
+    <div class="step"><div class="num">02</div><div class="label">Get Help</div></div>
+    <div class="arrow">›</div>
+    <div class="step"><div class="num">03</div><div class="label">See Patient</div></div>
+    <div class="arrow">›</div>
+    <div class="step"><div class="num">04</div><div class="label">Start CPR</div></div>
+    <div class="arrow">›</div>
+    <div class="step"><div class="num">05</div><div class="label">Continue</div></div>
+    <div class="arrow">›</div>
+    <div class="step"><div class="num">06</div><div class="label">Handoff</div></div>
+  </div>
+
+  <!-- 3 columns -->
+  <div class="body">
+
+    <!-- Architecture -->
+    <div class="card">
+      <div class="card-title">How it works</div>
+      <div class="arch-row">
+        <div class="arch-dot" style="background:#63b3ed"></div>
+        <div class="arch-text"><strong>Browser UI</strong> — camera, mic &amp; audio playback via WebSocket</div>
+      </div>
+      <div class="arch-row">
+        <div class="arch-dot" style="background:#68d391"></div>
+        <div class="arch-text"><strong>FastAPI + Pipecat</strong> — real-time audio pipeline, session management</div>
+      </div>
+      <div class="arch-row">
+        <div class="arch-dot" style="background:#fc8181"></div>
+        <div class="arch-text"><strong>Workflow FSM</strong> — app-owned state machine; AI cannot skip steps</div>
+      </div>
+      <div class="arch-row">
+        <div class="arch-dot" style="background:#f6ad55"></div>
+        <div class="arch-text"><strong>Gemini Live</strong> — scene understanding + natural voice coaching</div>
+      </div>
+    </div>
+
+    <!-- Problem solved -->
+    <div class="card highlight">
+      <div class="card-title red">The problem</div>
+      <div class="arch-row">
+        <div class="arch-dot" style="background:#fc8181"></div>
+        <div class="arch-text">Bystanders freeze in cardiac emergencies — survival drops 10% per minute without CPR</div>
+      </div>
+      <div class="arch-row">
+        <div class="arch-dot" style="background:#fc8181"></div>
+        <div class="arch-text">Dispatcher phone calls lack <strong>visual context</strong> — can't see what the caller sees</div>
+      </div>
+      <div class="arch-row">
+        <div class="arch-dot" style="background:#fc8181"></div>
+        <div class="arch-text">Generic AI chatbots will <strong>improvise</strong> — dangerous in emergency protocols</div>
+      </div>
+      <div class="arch-row" style="margin-top: 14px;">
+        <div class="arch-dot" style="background:#68d391"></div>
+        <div class="arch-text"><strong>Our answer:</strong> bounded AI — sees the scene, speaks instructions, stays on script</div>
+      </div>
+    </div>
+
+    <!-- Tools used -->
+    <div class="card">
+      <div class="card-title">Built with</div>
+
+      <div class="tool">
+        <div class="tool-icon" style="background: rgba(99,179,237,0.15);">🎨</div>
+        <div class="tool-info">
+          <strong style="color:#63b3ed">Lovable AI</strong>
+          <span>Frontend UI — React components, session flow, and audio/video interface. Designed in minutes.</span>
+        </div>
+      </div>
+
+      <div class="tool">
+        <div class="tool-icon" style="background: rgba(104,211,145,0.15);">✦</div>
+        <div class="tool-info">
+          <strong style="color:#68d391">Google Gemini Live</strong>
+          <span>Multimodal understanding: interprets live video frames + speaks guidance back in real time.</span>
+        </div>
+      </div>
+
+      <div class="tool">
+        <div class="tool-icon" style="background: rgba(246,173,85,0.15);">⌘</div>
+        <div class="tool-info">
+          <strong style="color:#f6ad55">Augment Code</strong>
+          <span>Backend engineering — pipeline, workflow FSM, prompts, and API. Built collaboratively with AI pair programming.</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-note">Research prototype &middot; Not a certified medical device &middot; Always follow local emergency services</div>
+    <div class="footer-built">Built with <span>Lovable</span> &middot; <span>Gemini</span> &middot; <span>Augment Code</span></div>
+  </div>
+
+</div>
+</body>
+</html>
