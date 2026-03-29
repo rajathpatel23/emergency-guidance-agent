@@ -92,6 +92,8 @@ npm run dev:api
 
 - [PRD](docs/PRD.md) — requirements and guardrails (may predate CPR-specific naming)
 - [Implementation](docs/IMPLEMENTATION.md) — deeper technical notes
+- [API](docs/API.md) — HTTP/WebSocket shape
+- Optional HTML (open locally): [system architecture](docs/architecture-overview.html), [showcase landing](docs/system-showcase.html), [presentation slide](docs/presentation.html)
 
 ---
 
