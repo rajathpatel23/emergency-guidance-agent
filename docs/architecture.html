@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emergency Guidance Agent — Architecture</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #dedad3;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+    }
+
+    /* ── Canvas (the Miro board) ── */
+    .canvas {
+      background: #faf8f2;
+      border-radius: 10px;
+      padding: 44px 48px 36px;
+      width: 1240px;
+      max-width: 100%;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.12);
+    }
+
+    .canvas-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: #1a1a1a;
+      margin-bottom: 3px;
+    }
+
+    .canvas-sub {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 32px;
+    }
+
+    .canvas-sub a { color: #e8923a; text-decoration: none; }
+
+    /* ── Main diagram row ── */
+    .diagram {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+    }
+
+    /* ── Top floating box (like the Taurus image box in top-right) ── */
+    .top-box {
+      position: absolute;
+      /* positioned relative to canvas via JS-free trick: we place it inline */
+    }
+
+    /* ── Group containers ── */
+    .group {
+      border: 2px solid #e8923a;
+      border-radius: 8px;
+      padding: 28px 16px 16px;
+      position: relative;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .group-label {
+      position: absolute;
+      top: -13px;
+      left: 14px;
+      background: #faf8f2;
+      padding: 0 8px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #e8923a;
+      letter-spacing: 0.01em;
+    }
+
+    .group-built {
+      position: absolute;
+      top: -13px;
+      right: 14px;
+      background: #faf8f2;
+      padding: 0 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #aaa;
+    }
+
+    /* ── Sub-groups (dashed) ── */
+    .subgroup {
+      border: 1.5px dashed #c4b99a;
+      border-radius: 6px;
+      padding: 10px 12px 14px;
+      margin-bottom: 10px;
+      position: relative;
+    }
+
+    .subgroup:last-child { margin-bottom: 0; }
+
+    .subgroup-label {
+      font-size: 11px;
+      color: #999;
+      font-weight: 500;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+
+    /* ── Service grid inside subgroups ── */
+    .services {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    .service {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      position: relative;
+      cursor: default;
+    }
+
+    .icon-box {
+      width: 52px;
+      height: 52px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+
+    .svc-name {
+      font-size: 10px;
+      color: #333;
+      text-align: center;
+      max-width: 64px;
+      line-height: 1.35;
+      font-weight: 500;
+    }
+
+    /* Numbered badge */
+    .num {
+      position: absolute;
+      top: -9px;
+      left: -9px;
+      width: 22px;
+      height: 22px;
+      background: #1a1a1a;
+      border-radius: 50%;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1;
+    }
+
+    /* ── Connector between groups ── */
+    .conn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 0 14px;
+      flex-shrink: 0;
+      width: 100px;
+      padding-top: 60px;
+    }
+
+    .conn-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #888;
+      text-align: center;
+      margin-bottom: 4px;
+    }
+
+    .arrow-fwd, .arrow-bwd {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      width: 100%;
+    }
+
+    .arrow-line {
+      flex: 1;
+      height: 1.5px;
+      background: #b0a898;
+      position: relative;
+    }
+
+    /* right-pointing arrowhead */
+    .arrow-fwd .arrow-line::after {
+      content: "";
+      position: absolute;
+      right: -1px;
+      top: -4px;
+      border: 5px solid transparent;
+      border-left: 7px solid #b0a898;
+    }
+
+    /* left-pointing arrowhead */
+    .arrow-bwd .arrow-line::before {
+      content: "";
+      position: absolute;
+      left: -1px;
+      top: -4px;
+      border: 5px solid transparent;
+      border-right: 7px solid #b0a898;
+    }
+
+    .arrow-tag {
+      font-size: 9px;
+      color: #aaa;
+      font-weight: 600;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    /* ── Colour palette for icon boxes ── */
+    .c-green  { background: #3d8c40; }
+    .c-blue   { background: #2276b4; }
+    .c-purple { background: #8b3fc6; }
+    .c-red    { background: #c0392b; }
+    .c-pink   { background: #c0396b; }
+    .c-teal   { background: #1a8a7a; }
+    .c-orange { background: #d4680a; }
+    .c-indigo { background: #4a56c6; }
+    .c-yellow { background: #b89020; }
+    .c-slate  { background: #4a5568; }
+
+    /* ── Bottom footer ── */
+    .footer {
+      margin-top: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 16px;
+      border-top: 1px solid #e0dbd0;
+    }
+
+    .credits {
+      display: flex;
+      gap: 24px;
+    }
+
+    .credit {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #555;
+    }
+
+    .credit-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+    }
+
+    .flow-steps {
+      font-size: 11px;
+      color: #aaa;
+    }
+
+    /* ── Pipeline internal steps ── */
+    .pipeline-flow {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .pipe-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(232,146,58,0.08);
+      border-radius: 6px;
+      padding: 6px 10px;
+      width: 100%;
+      position: relative;
+    }
+
+    .pipe-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .pipe-text {
+      font-size: 11px;
+      font-weight: 600;
+      color: #333;
+      line-height: 1.3;
+    }
+
+    .pipe-text small {
+      display: block;
+      font-weight: 400;
+      color: #888;
+      font-size: 10px;
+    }
+
+    .pipe-pill {
+      margin-left: auto;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      letter-spacing: 0.06em;
+    }
+
+    .pill-io  { background: #dbeafe; color: #2276b4; }
+    .pill-ai  { background: #dcfce7; color: #3d8c40; }
+    .pill-fsm { background: #fef3c7; color: #b89020; }
+
+    .pipe-down {
+      font-size: 12px;
+      color: #ccc;
+      line-height: 1;
+    }
+  </style>
+</head>
+<body>
+<div class="canvas">
+
+  <div class="canvas-title">Emergency Guidance Agent <span style="font-weight:400; color:#aaa; font-size:16px;">— Team Steady Hand</span></div>
+  <div class="canvas-sub">Real-time voice-and-video CPR coaching for bystanders — system architecture overview</div>
+
+  <div class="diagram">
+
+    <!-- ════════════ FRONTEND ════════════ -->
+    <div class="group" style="flex: 0.85;">
+      <div class="group-label">front end</div>
+      <div class="group-built">Lovable AI</div>
+
+      <!-- Browser UI subgroup -->
+      <div class="subgroup">
+        <div class="subgroup-label">browser interface</div>
+        <div class="services">
+          <div class="service">
+            <div class="num">1</div>
+            <div class="icon-box c-blue">📷</div>
+            <div class="svc-name">Live Camera</div>
+          </div>
+          <div class="service">
+            <div class="num">2</div>
+            <div class="icon-box c-teal">🎤</div>
+            <div class="svc-name">Microphone</div>
+          </div>
+          <div class="service">
+            <div class="num">3</div>
+            <div class="icon-box c-purple">🔊</div>
+            <div class="svc-name">Audio Playback</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- App layer subgroup -->
+      <div class="subgroup">
+        <div class="subgroup-label">app layer</div>
+        <div class="services">
+          <div class="service">
+            <div class="num">4</div>
+            <div class="icon-box c-pink">⚛️</div>
+            <div class="svc-name">React UI</div>
+          </div>
+          <div class="service">
+            <div class="num">5</div>
+            <div class="icon-box c-indigo">📡</div>
+            <div class="svc-name">Pipecat Client JS</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Connector 1 -->
+    <div class="conn">
+      <div class="conn-title">WebSocket</div>
+      <div class="arrow-fwd"><div class="arrow-line"></div></div>
+      <div class="arrow-tag">audio + video →</div>
+      <div style="height:8px"></div>
+      <div class="arrow-bwd"><div class="arrow-line"></div></div>
+      <div class="arrow-tag">← coaching audio</div>
+    </div>
+
+    <!-- ════════════ BACKEND ════════════ -->
+    <div class="group" style="flex: 1.2;">
+      <div class="group-label">backend</div>
+      <div class="group-built">Augment Code</div>
+
+      <!-- Pipecat pipeline subgroup -->
+      <div class="subgroup">
+        <div class="subgroup-label">pipecat pipeline</div>
+        <div class="pipeline-flow">
+
+          <div class="pipe-item">
+            <div class="num">6</div>
+            <div class="pipe-icon c-blue">⬇</div>
+            <div class="pipe-text">transport.input()<small>receives browser audio/video</small></div>
+            <div class="pipe-pill pill-io">I/O</div>
+          </div>
+          <div class="pipe-down">↓</div>
+          <div class="pipe-item">
+            <div class="num">7</div>
+            <div class="pipe-icon c-green">✦</div>
+            <div class="pipe-text">GeminiLiveLLM Service<small>streams to Gemini Live API</small></div>
+            <div class="pipe-pill pill-ai">AI</div>
+          </div>
+          <div class="pipe-down">↓</div>
+          <div class="pipe-item">
+            <div class="num">8</div>
+            <div class="pipe-icon c-yellow">⚙</div>
+            <div class="pipe-text">Workflow Processor<small>FSM — app owns transitions</small></div>
+            <div class="pipe-pill pill-fsm">FSM</div>
+          </div>
+          <div class="pipe-down">↓</div>
+          <div class="pipe-item">
+            <div class="num">9</div>
+            <div class="pipe-icon c-blue">⬆</div>
+            <div class="pipe-text">transport.output()<small>sends audio back to browser</small></div>
+            <div class="pipe-pill pill-io">I/O</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Session layer -->
+      <div class="subgroup">
+        <div class="subgroup-label">api layer</div>
+        <div class="services">
+          <div class="service">
+            <div class="num">10</div>
+            <div class="icon-box c-orange">🚀</div>
+            <div class="svc-name">FastAPI</div>
+          </div>
+          <div class="service">
+            <div class="num">11</div>
+            <div class="icon-box c-slate">📋</div>
+            <div class="svc-name">Session Manager</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Connector 2 -->
+    <div class="conn">
+      <div class="conn-title">Gemini Live API</div>
+      <div class="arrow-fwd"><div class="arrow-line"></div></div>
+      <div class="arrow-tag">audio + prompt →</div>
+      <div style="height:8px"></div>
+      <div class="arrow-bwd"><div class="arrow-line"></div></div>
+      <div class="arrow-tag">← voice + text</div>
+    </div>
+
+    <!-- ════════════ GEMINI ════════════ -->
+    <div class="group" style="flex: 0.85;">
+      <div class="group-label">AI layer</div>
+      <div class="group-built">Google</div>
+
+      <!-- Gemini Live subgroup -->
+      <div class="subgroup">
+        <div class="subgroup-label">gemini live — native audio</div>
+        <div class="services">
+          <div class="service">
+            <div class="num">12</div>
+            <div class="icon-box c-teal">👁</div>
+            <div class="svc-name">Scene Vision</div>
+          </div>
+          <div class="service">
+            <div class="num">13</div>
+            <div class="icon-box c-blue">👂</div>
+            <div class="svc-name">Speech Input</div>
+          </div>
+          <div class="service">
+            <div class="num">14</div>
+            <div class="icon-box c-green">🗣️</div>
+            <div class="svc-name">Native Audio Output</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Model config subgroup -->
+      <div class="subgroup">
+        <div class="subgroup-label">model config</div>
+        <div class="services">
+          <div class="service">
+            <div class="num">15</div>
+            <div class="icon-box c-orange">📌</div>
+            <div class="svc-name">Step-bound Prompts</div>
+          </div>
+          <div class="service">
+            <div class="num">16</div>
+            <div class="icon-box c-indigo">🎙️</div>
+            <div class="svc-name">Charon Voice</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /diagram -->
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="credits">
+      <div class="credit">
+        <div class="credit-dot" style="background:#2276b4"></div>
+        Lovable AI — Frontend
+      </div>
+      <div class="credit">
+        <div class="credit-dot" style="background:#d4680a"></div>
+        Augment Code — Backend
+      </div>
+      <div class="credit">
+        <div class="credit-dot" style="background:#3d8c40"></div>
+        Google Gemini Live — AI
+      </div>
+    </div>
+    <div class="flow-steps">
+      Workflow: intake → escalation → see patient → compressions → continue → handoff
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

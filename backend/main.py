@@ -53,8 +53,7 @@ async def stream(websocket: WebSocket, session_id: str):
         logger.info(f"[ws] pipeline ready — starting runner")
         await runner.run(task)
     except Exception:
-        import traceback
-        traceback.print_exc()
+        logger.exception("[ws] pipeline error")
     finally:
         logger.info(f"[ws] closed     session={session_id[:8]}  final_step={session.current_step}")
         end_session(session_id)

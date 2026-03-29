@@ -98,8 +98,8 @@ def evaluate(
     if user_action == "repeat":
         return WorkflowDecision(kind="repeat", next_step=step, reason="user requested repeat")
 
-    # --- Scene is unclear: ask for better angle ---
-    if interpretation.view_unclear:
+    # --- Scene is unclear: ask for better angle (unless rescuer affirms the view is adequate) ---
+    if interpretation.view_unclear and not interpretation.user_asserts_view_adequate:
         return WorkflowDecision(kind="clarify", next_step=step, reason="view unclear")
 
     # --- Per-step model signal checks ---
@@ -115,8 +115,12 @@ def evaluate(
         return WorkflowDecision(kind="repeat", next_step="escalation", reason="delivering escalation")
 
     if step == "see_patient":
-        if interpretation.person_visible:
-            return WorkflowDecision(kind="advance", next_step="start_compressions", reason="patient in view")
+        if interpretation.person_visible or interpretation.user_asserts_view_adequate:
+            return WorkflowDecision(
+                kind="advance",
+                next_step="start_compressions",
+                reason="patient in view or rescuer confirmed camera/view",
+            )
         return WorkflowDecision(kind="repeat", next_step="see_patient", reason="patient not clearly visible")
 
     if step == "start_compressions":

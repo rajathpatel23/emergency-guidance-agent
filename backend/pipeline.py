@@ -84,8 +84,12 @@ class WorkflowProcessor(FrameProcessor):
             session.session_id,
             current_step=session.current_step,
             step_attempts=session.step_attempts,
-            patient_visible=interp.person_visible,
-            view_quality="unclear" if interp.view_unclear else "clear",
+            patient_visible=interp.person_visible or interp.user_asserts_view_adequate,
+            view_quality=(
+                "unclear"
+                if interp.view_unclear and not interp.user_asserts_view_adequate
+                else "clear"
+            ),
         )
 
         if session.current_step != prev_step:
@@ -101,23 +105,84 @@ class WorkflowProcessor(FrameProcessor):
 # Heuristic interpretation
 # ---------------------------------------------------------------------------
 
+# Phrases suggesting the victim/chest is actually visible (vision or confident description).
+_VISIBILITY_POSITIVE = (
+    "i can see",
+    "i see the",
+    "i see them",
+    "see the patient",
+    "see them on",
+    "chest is visible",
+    "chest in view",
+    "in the frame",
+    "in frame",
+    "lying on",
+    "on the floor",
+    "on their back",
+    "unresponsive",
+    "not breathing",
+)
+
+# Phrases that deny visibility — checked before loose "patient" matches (avoids "can't see the patient" → visible).
+_VISIBILITY_NEGATIVE = (
+    "cannot see the patient",
+    "can't see the patient",
+    "cannot see them",
+    "can't see them",
+    "don't see the patient",
+    "don't see anyone",
+    "i don't see",
+    "no one visible",
+    "no one in the frame",
+    "not in the frame",
+    "not visible",
+    "too dark to see",
+    "too blurry",
+)
+
+# Rescuer affirms camera/view is adequate — transcript only; workflow may advance without confirming vision.
+_USER_VIEW_OK = (
+    "good angle",
+    "right angle",
+    "got a better angle",
+    "have a good angle",
+    "better angle now",
+    "clear view",
+    "clearer now",
+    "you should see",
+    "in view now",
+    "moved the camera",
+    "positioned the camera",
+    "i moved the",
+    "phone is steady",
+    "trust me",
+    "have to trust",
+    "best i can",
+    "that's as good",
+    "how's that",
+    "is that ok",
+)
+
+
+def _person_visible_heuristic(model_text: str, transcript: str) -> bool:
+    combined = (model_text + " " + transcript).lower()
+    if any(p in combined for p in _VISIBILITY_NEGATIVE):
+        return False
+    return any(p in combined for p in _VISIBILITY_POSITIVE)
+
+
+def _user_asserts_view_adequate(transcript: str) -> bool:
+    t = transcript.lower()
+    if not t.strip():
+        return False
+    return any(p in t for p in _USER_VIEW_OK)
+
+
 def _extract_interpretation(model_text: str, transcript: str = "") -> ModelInterpretation:
     combined = (model_text + " " + transcript).lower()
     return ModelInterpretation(
-        person_visible=any(
-            w in combined
-            for w in [
-                "person",
-                "patient",
-                "victim",
-                "body",
-                "chest",
-                "lying",
-                "on the floor",
-                "unresponsive",
-                "not breathing",
-            ]
-        ),
+        person_visible=_person_visible_heuristic(model_text, transcript),
+        user_asserts_view_adequate=_user_asserts_view_adequate(transcript),
         view_unclear=any(
             w in combined
             for w in [
@@ -197,11 +262,18 @@ async def create_pipeline(
         ),
     )
 
-    # Seed the context with a minimal user message so _create_initial_response()
-    # sends a real turn_complete to Gemini when the session connects, causing it
-    # to speak the opening line immediately without waiting for user input.
+    # Seed the context so Gemini speaks the mandatory Emergency Guidance Agent opening
+    # immediately on connect (see prompts.BASE_SYSTEM_PROMPT).
     seed_context = LLMContext(
-        messages=[{"role": "user", "content": "begin"}]
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    "Session just started. Speak now: introduce yourself as the Emergency Guidance Agent, "
+                    "ask what you can help them with, keep it to one or two short sentences."
+                ),
+            }
+        ]
     )
     await gemini.set_context(seed_context)  # type: ignore[arg-type]
 
