@@ -78,6 +78,8 @@ cd cpr-copilot && npm install && npm run dev
 
 Point `cpr-copilot` at the API via `VITE_API_URL` if not using `http://localhost:8000`.
 
+**Secrets:** Put your real `GEMINI_API_KEY` only in a **local** `.env` (repo root or `backend/.env`), never in `.env.example` or in commits. If a key was ever pushed or shared, **revoke it** in [Google AI Studio](https://aistudio.google.com/apikey) and create a new one.
+
 **Node API only (optional):**
 
 ```bash
