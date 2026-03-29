@@ -18,9 +18,14 @@ export function createStubGeminiOrchestrator(): GeminiOrchestrator {
     async interpret(input) {
       void CPR_ASSISTANT_SYSTEM_PROMPT;
       const t = input.transcript?.toLowerCase() ?? "";
+      const userOk =
+        /\b(good angle|right angle|trust me|clear view|moved the camera|you should see)\b/i.test(t);
       const interpretation: ModelInterpretation = {
         transcript_summary: input.transcript,
-        patient_visible: /\b(person|patient|victim|chest|floor|back|unresponsive|not breathing)\b/.test(t),
+        patient_visible: /\b(person|patient|victim|chest|floor|back|unresponsive|not breathing)\b/.test(
+          t,
+        ),
+        user_asserts_view_adequate: userOk,
         view_unclear: false,
         compressions_detected: /\b(compress|compression|push|pumping|cpr|pressing)\b/.test(t),
         suggested_instruction: undefined,

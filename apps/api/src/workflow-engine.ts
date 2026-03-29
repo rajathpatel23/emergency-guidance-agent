@@ -33,10 +33,17 @@ export function decideAfterModel(
   }
 
   if (step === "see_patient") {
-    if (interpretation?.view_unclear || state.view_quality === "unclear") {
+    const unclear =
+      (interpretation?.view_unclear === true || state.view_quality === "unclear") &&
+      interpretation?.user_asserts_view_adequate !== true;
+    if (unclear) {
       return { kind: "repeat", step: "see_patient" };
     }
-    if (interpretation?.patient_visible === true || state.patient_visible) {
+    if (
+      interpretation?.patient_visible === true ||
+      interpretation?.user_asserts_view_adequate === true ||
+      state.patient_visible
+    ) {
       return { kind: "advance", next: "start_compressions" };
     }
     return { kind: "repeat", step: "see_patient" };

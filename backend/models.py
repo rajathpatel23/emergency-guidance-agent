@@ -48,6 +48,7 @@ class SessionState:
 @dataclass
 class ModelInterpretation:
     person_visible: bool = False       # victim / chest visible in frame
+    user_asserts_view_adequate: bool = False  # rescuer says camera angle/view is OK; app may advance
     view_unclear: bool = False         # camera angle insufficient
     hands_positioned: bool = False     # hands on center of the chest
     compressions_happening: bool = False  # user appears to be compressing
