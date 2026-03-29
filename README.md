@@ -92,7 +92,7 @@ npm run dev:api
 
 - [PRD](docs/PRD.md) — requirements and guardrails (may predate CPR-specific naming)
 - [API](docs/API.md) — HTTP/WebSocket shape
-- Optional HTML (open locally): [architecture diagram](docs/architecture.html), [showcase landing](docs/system-showcase.html), [presentation slide](docs/presentation.html)
+- Optional: [architecture diagram](docs/architecture.html) (open locally in a browser)
 
 ---
 
