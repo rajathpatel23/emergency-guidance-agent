@@ -264,5 +264,5 @@ FastAPI auto-generates interactive docs (HTTP only) at `http://localhost:8000/do
 ## Notes
 
 - The Gemini Live session opens on WS connect and closes on disconnect
-- `response_modalities` is `["TEXT"]` by default — set to `["TEXT", "AUDIO"]` in `gemini_session.py` for voice output
-- Model interpretation (injury visible, view unclear, pressure applied) is currently heuristic keyword matching — will be replaced with structured JSON output from Gemini
+- Voice output modality is configured on `GeminiLiveLLMService` in `backend/pipeline.py` (Pipecat), not in a separate session wrapper
+- Model interpretation for the workflow is currently heuristic keyword matching over model/user text — can be replaced with structured JSON output from Gemini later
